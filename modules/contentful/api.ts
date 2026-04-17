@@ -13,17 +13,17 @@ interface IQueryParams {
 }
 
 const fetchEntry = async (contentType: string, { locale }: IQueryParams) => {
-  if (!client) return undefined
+  if (!client) return null
   try {
     const result = await client.getEntries({
       content_type: contentType,
       limit: 1,
       locale,
     })
-    return result.items[0]?.fields
+    return result.items[0]?.fields ?? null
   } catch (error) {
     console.error(`Error fetching ${contentType}:`, error)
-    return undefined
+    return null
   }
 }
 
