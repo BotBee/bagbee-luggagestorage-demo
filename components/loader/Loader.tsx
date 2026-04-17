@@ -1,7 +1,9 @@
 import React from 'react'
+import dynamic from 'next/dynamic'
 import * as animationData from '../../public/lottie/airplane_loading.json'
-import Lottie from 'react-lottie'
 import styled from '@emotion/styled'
+
+const Lottie = dynamic(() => import('react-lottie'), { ssr: false })
 
 interface ILoaderProps {
   text: string

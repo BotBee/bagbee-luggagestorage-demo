@@ -1,6 +1,8 @@
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { useEffect, useState } from 'react'
-import Lottie from 'react-lottie'
+import dynamic from 'next/dynamic'
+
+const Lottie = dynamic(() => import('react-lottie'), { ssr: false })
 import { AirtableOrder } from '../../common/types'
 import Header from '../../components/header/Header'
 import Loader from '../../components/loader/Loader'
