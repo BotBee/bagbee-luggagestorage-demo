@@ -14,7 +14,7 @@ import { getAboutPageContent } from '../modules/contentful/api'
 import { contentfulImage } from '../utils/contentful'
 
 interface IAboutPageProps {
-  data: IAboutPageFields
+  data: IAboutPageFields | null
 }
 
 const Container = styled.div`
@@ -192,6 +192,23 @@ const About = ({ data }: IAboutPageProps) => {
   const router = useRouter()
   const { locale } = router
   const t = locale === 'en' ? en : is
+
+  if (!data) {
+    return (
+      <>
+        <NextSeo title='Bagbee | About us' />
+        <Header />
+        <Container>
+          <HeroContainer>
+            <h1>About us</h1>
+          </HeroContainer>
+          <p>Content is temporarily unavailable.</p>
+        </Container>
+        <Footer />
+      </>
+    )
+  }
+
   const {
     title,
     textSections,

@@ -12,7 +12,7 @@ import WidgetAndText from '../components/trustpilot/WidgetAndText'
 import ServiceSelector from '../components/landing-sections/ServiceSelector'
 
 interface ILandingPageProps {
-  data: ILandingPageFields
+  data: ILandingPageFields | null
 }
 
 const LandingPage = ({ data }: ILandingPageProps) => {

@@ -28,14 +28,18 @@ const Container = styled.section`
   }
 `
 interface PrivacyPolicyProps {
-  data: IPrivacyPolicyPageFields
+  data: IPrivacyPolicyPageFields | null
 }
 
 const PrivacyPolicyPage = ({ data }: PrivacyPolicyProps) => {
   return (
     <>
       <Header />
-      <Container>{documentToReactComponents(data.privacyPolicy)}</Container>
+      <Container>
+        {data
+          ? documentToReactComponents(data.privacyPolicy)
+          : <p>Content is temporarily unavailable.</p>}
+      </Container>
       <Footer />
     </>
   )

@@ -33,7 +33,7 @@ const Container = styled.section`
   }
 `
 interface TermsConditionsProps {
-  data: ITermsAndAgreementsPageFields
+  data: ITermsAndAgreementsPageFields | null
 }
 
 const TermsConditionsPage = ({ data }: TermsConditionsProps) => {
@@ -41,7 +41,9 @@ const TermsConditionsPage = ({ data }: TermsConditionsProps) => {
     <>
       <Header />
       <Container>
-        {documentToReactComponents(data.termsAndAgreements)}
+        {data
+          ? documentToReactComponents(data.termsAndAgreements)
+          : <p>Content is temporarily unavailable.</p>}
       </Container>
       <Footer />
     </>
