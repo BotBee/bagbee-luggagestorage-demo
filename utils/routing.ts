@@ -1,0 +1,35 @@
+export const ApplicationRoutes = {
+  pages: {
+    book: '/book',
+    chooseAirline: '/book/choose-airline',
+    bagSelection: '/book/bag-selection',
+    confirmOrder: '/book/confirm-order',
+    selectFlight: '/book/select-flight',
+    departureDate: '/book/departure-date',
+    arrivalAirport: '/book/arrival-airport',
+    pickUp: '/book/pick-up',
+    personalInfo: '/book/personal-info',
+  },
+  arrival: {
+    book: '/book/arrival',
+    chooseAirline: '/book/arrival/choose-airline',
+    originAirport: '/book/arrival/origin-airport',
+    selectFlight: '/book/arrival/select-flight',
+    bagSelection: '/book/arrival/bag-selection',
+    delivery: '/book/arrival/delivery',
+    personalInfo: '/book/arrival/personal-info',
+    confirmOrder: '/book/arrival/confirm-order',
+  },
+  apiBook: '/api/book',
+  AirTable: {
+    apiAirtableCreate: '/api/airtable/create',
+    apiAirtableRead: '/api/airtable/read',
+    apiAirtableUpdatePayedStatus: '/api/airtable/update-paid-status',
+  },
+  Isavia: {
+    apiGetFlights: '/api/air-travel/get-flights',
+  },
+  apiRapyd: '/api/rapyd',
+  success: '/payment/success',
+  error: '/error',
+}
