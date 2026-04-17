@@ -1,5 +1,5 @@
 import styled from '@emotion/styled'
-import { FieldSet, Record } from 'airtable'
+import { Error, FieldSet, Record } from 'airtable'
 import { NextSeo } from 'next-seo'
 import { useRouter } from 'next/router'
 import { FormProvider, useForm } from 'react-hook-form'

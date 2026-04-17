@@ -111,7 +111,7 @@ const ArrivalConfirmOrder = () => {
   const [discountCodeFound, setDiscountCodeFound] = useState<
     boolean | undefined
   >()
-  const [discountCode, setDiscountCode] = useState<any>()
+  const [discountCode] = useState<any>()
   const [inputValue, setInputValue] = useState<string>('')
   const [isFetching, setIsFetching] = useState<boolean>(false)
   const pendingDiscountCode = useBookingStore(state => state.pendingDiscountCode)

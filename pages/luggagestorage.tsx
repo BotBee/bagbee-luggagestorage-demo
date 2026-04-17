@@ -686,7 +686,6 @@ const LuggageStorage = () => {
     register,
     handleSubmit,
     watch,
-    setValue,
     trigger,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
