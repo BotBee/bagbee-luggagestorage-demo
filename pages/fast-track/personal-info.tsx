@@ -15,6 +15,7 @@ import en from '../../common/locales/en'
 import { calculateFastTrackPrice } from '../../utils/pricing'
 import dayjs from 'dayjs'
 import { getFlights } from '../../modules/isaviaAPI/api'
+import { buildFastTrackItems, trackBeginCheckout } from '../../utils/analytics'
 
 export const InputContainer = styled.div`
   display: flex;
@@ -266,6 +267,7 @@ const ChooseAirline = () => {
   }, [router.isReady, router.query, fastTrack.departureDate, updateFastTrack])
 
   const onSubmit = async ({ passengers, ...values }: FormData) => {
+    const price = calculateFastTrackPrice(passengers.length)
     updateFastTrack({
       customerInfo: {
         ...fastTrack.customerInfo,
@@ -273,10 +275,12 @@ const ChooseAirline = () => {
       },
       passengers,
       checkoutPrice: {
-        amount: calculateFastTrackPrice(passengers.length),
+        amount: price,
         currency: 'ISK',
       },
     })
+    const items = buildFastTrackItems({ ...fastTrack, passengers })
+    trackBeginCheckout(price, items, fastTrack.customerInfo?.discountCode?.code)
     router.push(ApplicationRoutes.pages.fastTrack.confirmOrder)
   }
 

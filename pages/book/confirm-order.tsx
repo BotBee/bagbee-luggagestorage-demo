@@ -20,6 +20,11 @@ import { makePayment } from '../../modules/rapydAPI/methods'
 import { useBookingStore } from '../../store/store'
 import { discountPrice, mapCurrencyToDisplay } from '../../utils/pricing'
 import { ApplicationRoutes } from '../../utils/routing'
+import {
+  buildCheckinItems,
+  stashPendingPurchase,
+  trackAddPaymentInfo,
+} from '../../utils/analytics'
 import { InputContainer, Label } from './personal-info'
 
 const InfoBoxGrid = styled.div`
@@ -107,6 +112,18 @@ const ConfirmOrder = () => {
 
   const onSubmit = async (values: Customer) => {
     updateCustomer(values)
+
+    const discount = bookingState.customerInfo.discountCode?.discount ?? 0
+    const finalValue = discountPrice(bookingState.checkoutPrice.amount, discount)
+    const items = buildCheckinItems(bookingState)
+    const coupon = bookingState.customerInfo.discountCode?.code
+    trackAddPaymentInfo(finalValue, items, coupon)
+    stashPendingPurchase({
+      service: 'check-in',
+      value: finalValue,
+      items,
+      coupon,
+    })
 
     try {
       // Read fresh state from the store. The hook-provided `bookingState` is

@@ -17,6 +17,7 @@ import is from '../../common/locales/is'
 import EcoLeaf from '../../public/icons/EcoLeaf'
 import AvailablePickupTimes from '../../components/available-pickup-times/AvailablePickupTimes'
 import { hydrateBookingFromDeepLinkQuery } from '../../utils/hydrateBookingFromDeepLinkQuery'
+import { buildCheckinItems, trackAddShippingInfo } from '../../utils/analytics'
 
 const Flexbox = styled.div`
   display: flex;
@@ -105,6 +106,12 @@ const PickUp = () => {
       !bookingState.pickupInformation.pickupSlot
     )
       return
+    trackAddShippingInfo(
+      bookingState.checkoutPrice.amount,
+      buildCheckinItems(bookingState),
+      bookingState.pickupInformation.pickupSlot,
+      bookingState.customerInfo?.discountCode?.code,
+    )
     router.push(ApplicationRoutes.pages.personalInfo)
   }
 

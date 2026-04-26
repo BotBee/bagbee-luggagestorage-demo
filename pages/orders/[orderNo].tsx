@@ -4,6 +4,7 @@ import { NextSeo } from 'next-seo'
 import Header from '../../components/header/Header'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
+import { trackPurchase } from '../../utils/analytics'
 import {
   usePlacesWidget,
   ReactGoogleAutocompleteProps,
@@ -732,6 +733,16 @@ const OrderPage = ({
       useBookingStore.persist.clearStorage()
     }
   }, [paymentSuccess])
+
+  // Fire GA4 `purchase` event on successful payment landings.
+  useEffect(() => {
+    if (!order || !orderNo) return
+    if (paymentSuccess || fastTrackPaid) {
+      const amount = Number(order.fields?.['Upphæð']) || undefined
+      const txId = `${orderNo}${fastTrackPaid ? '-ft' : ''}`
+      trackPurchase(txId, amount != null ? { value: amount, items: [] } : undefined)
+    }
+  }, [paymentSuccess, fastTrackPaid, order, orderNo])
 
   // Lightbox tracks the index of the open photo so users can swipe / arrow
   // through the gallery. null = closed.

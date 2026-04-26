@@ -2,15 +2,16 @@ import Lottie from 'react-lottie'
 import Header from '../../components/header/Header'
 import Message from '../../components/message/Message'
 import styled from '@emotion/styled'
+import { useEffect } from 'react'
 
 import * as animationData from '../../public/lottie/checkmark.json'
 import { useRouter } from 'next/router'
-import { useEffect } from 'react'
 import is from '../../common/locales/is'
 import en from '../../common/locales/en'
 import { GetStaticProps, InferGetStaticPropsType } from 'next'
 import { getNavigation } from '../../modules/contentful/api'
 import { useBookingStore } from '../../store/store'
+import { trackPurchase } from '../../utils/analytics'
 
 const Container = styled.div`
   display: flex;
@@ -27,6 +28,12 @@ const Success = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>)
   const { recordId } = router.query
   const { locale } = router
   const t = locale === 'en' ? en : is
+
+  useEffect(() => {
+    if (typeof recordId === 'string' && recordId) {
+      trackPurchase(recordId)
+    }
+  }, [recordId])
 
   const defaultOptions = {
     loop: false,

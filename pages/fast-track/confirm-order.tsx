@@ -19,6 +19,11 @@ import { makePayment } from '../../modules/rapydAPI/methods'
 import { useBookingStore } from '../../store/store'
 import { discountPrice, mapCurrencyToDisplay } from '../../utils/pricing'
 import { ApplicationRoutes } from '../../utils/routing'
+import {
+  buildFastTrackItems,
+  stashPendingPurchase,
+  trackAddPaymentInfo,
+} from '../../utils/analytics'
 import { InputContainer, Label } from './personal-info'
 
 const InfoBoxGrid = styled.div`
@@ -97,6 +102,18 @@ const ConfirmOrder = () => {
         ...fastTrack.customerInfo,
         ...values,
       },
+    })
+
+    const discount = fastTrack.customerInfo.discountCode?.discount ?? 0
+    const finalValue = discountPrice(fastTrack.checkoutPrice.amount, discount)
+    const items = buildFastTrackItems(fastTrack)
+    const coupon = fastTrack.customerInfo.discountCode?.code
+    trackAddPaymentInfo(finalValue, items, coupon)
+    stashPendingPurchase({
+      service: 'fast-track',
+      value: finalValue,
+      items,
+      coupon,
     })
 
     try {

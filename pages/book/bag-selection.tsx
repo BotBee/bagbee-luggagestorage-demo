@@ -13,6 +13,7 @@ import styled from '@emotion/styled'
 import { hydrateBookingFromDeepLinkQuery } from '../../utils/hydrateBookingFromDeepLinkQuery'
 import { calculateCheckoutPrice } from '../../utils/pricing'
 import { ApplicationRoutes } from '../../utils/routing'
+import { buildCheckinItems, trackBeginCheckout } from '../../utils/analytics'
 
 const ButtonContainer = styled.div`
   margin-top: 50px;
@@ -74,6 +75,11 @@ const BagSelection = () => {
       amount: price,
       currency: bookingState.checkoutPrice.currency,
     })
+    const items = buildCheckinItems({
+      ...bookingState,
+      checkoutPrice: { amount: price, currency: bookingState.checkoutPrice.currency },
+    })
+    trackBeginCheckout(price, items, bookingState.customerInfo?.discountCode?.code)
     router.push(ApplicationRoutes.pages.pickUp)
   }
 
