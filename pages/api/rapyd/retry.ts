@@ -71,7 +71,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       country: 'IS',
       language: 'EN',
       merchant_reference_id: 'bagbee',
-      complete_payment_url: `${baseUrl}/${safeLocale}/payment/success?recordId=${recordId}`,
+      // Mirror common/mapper.ts: baggage retries land on
+      // /orders/{5-char}?paid=true; fast-track keeps the legacy
+      // /payment/success route since it has no tracking page.
+      complete_payment_url: safeTableType === 'baggage'
+        ? `${baseUrl}/${safeLocale}/orders/${recordId.slice(-5)}?paid=true`
+        : `${baseUrl}/${safeLocale}/payment/success?recordId=${recordId}`,
       error_payment_url: `${baseUrl}/${safeLocale}/payment/cancel?recordId=${recordId}&type=${safeTableType}`,
       metadata: {
         recordId,

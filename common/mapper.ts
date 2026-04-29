@@ -22,7 +22,16 @@ export const mapToPayment = (
   country: 'IS',
   language: 'EN',
   merchant_reference_id: 'bagbee',
-  complete_payment_url: `https://${window.location.host}/${locale}/payment/success?recordId=${recordId}`,
+  // Baggage bookings land on /orders/{5-char}?paid=true — the customer's
+  // tracking page that already handles `?paid=true` (success banner +
+  // shows full order details). The 5-char code is the last 5 chars of the
+  // Airtable recordId, mirroring the `Pöntunarnúmer (fx)` formula. The
+  // legacy /payment/success page stays as a fallback for any old links.
+  // Fast-Track stays on /payment/success because that flow doesn't have
+  // a corresponding /orders/{code} tracking page yet.
+  complete_payment_url: tableType === 'baggage'
+    ? `https://${window.location.host}/${locale}/orders/${recordId.slice(-5)}?paid=true`
+    : `https://${window.location.host}/${locale}/payment/success?recordId=${recordId}`,
   // Carry recordId + tableType through to the cancel page so it can offer
   // a one-click "Retry payment" against the same Airtable record without
   // forcing the customer to redo the wizard.

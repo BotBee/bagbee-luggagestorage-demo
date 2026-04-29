@@ -2,12 +2,13 @@ import styled from '@emotion/styled'
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { NextSeo } from 'next-seo'
 import Header from '../../components/header/Header'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import TimeRangeSlider from '../../components/time-range-slider/TimeRangeSlider'
 import { getMorningConstraints, getSliderConstraints } from '../../common/postalCodeConstraints'
 import en from '../../common/locales/en'
 import is from '../../common/locales/is'
+import { useBookingStore } from '../../store/store'
 
 // --- Status types ---
 type OrderStatus = 'Pending' | 'Confirmed' | 'Planned' | 'In Progress' | 'Delivered'
@@ -388,6 +389,16 @@ const OrderPage = ({
   const t = (router.locale === 'en' ? en : is).orderTrackingPage
   const paymentSuccess = router.query.paid === 'true'
   const paymentError = router.query.error === 'true'
+
+  // Booking is paid — drop the persisted booking-store snapshot so the
+  // customer doesn't see a stale half-filled wizard if they come back to
+  // /book days later. Used to live on /payment/success but successful
+  // baggage payments now redirect straight to /orders/{code}?paid=true.
+  useEffect(() => {
+    if (paymentSuccess) {
+      useBookingStore.persist.clearStorage()
+    }
+  }, [paymentSuccess])
 
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 

@@ -36,7 +36,9 @@ const Success = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>)
 
   // Booking is paid — drop the persisted booking-store snapshot so the
   // customer doesn't see a stale half-filled wizard if they come back to
-  // /book days later. Only fires after a confirmed payment landing.
+  // /book days later. (Successful baggage payments redirect directly to
+  // /orders/{code}?paid=true now and clear there; this path only fires
+  // for legacy URLs and Fast-Track flows that still land here.)
   useEffect(() => {
     if (typeof recordId === 'string' && recordId) {
       useBookingStore.persist.clearStorage()
