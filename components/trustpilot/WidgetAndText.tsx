@@ -23,9 +23,10 @@ const Container = styled.div`
     margin-top: 48px;
     flex-direction: row;
     padding: 0 48px;
-    max-width: 1000px;
+    max-width: 1240px;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 80px;
   }
 `
 
