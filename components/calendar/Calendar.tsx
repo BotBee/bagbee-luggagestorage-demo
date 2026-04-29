@@ -20,7 +20,17 @@ interface ICalendarProps {
 }
 const Calendar = ({ onChange, minDate, disabledDates }: ICalendarProps) => {
   const bookingState = useBookingStore((state) => state.booking)
-  const selectedDate = bookingState.flightInformation.departureDate
+  // Only show a date as `selected` when it's a real future Date that the
+  // calendar would actually allow. If the persisted state (or anything
+  // upstream) hands us a string, NaN, or a stale past date, fall back to
+  // undefined so DayPicker shows the current month with no preselection
+  // and the customer can click any valid date.
+  const persistedDate = bookingState?.flightInformation?.departureDate
+  const isUsable =
+    persistedDate instanceof Date &&
+    !isNaN(persistedDate.getTime()) &&
+    (!minDate || persistedDate.getTime() >= minDate.getTime())
+  const selectedDate = isUsable ? persistedDate : undefined
 
   // Get the current date and time
   const oneYearFromNow = new Date(new Date().setFullYear(new Date().getFullYear() + 1))

@@ -12,14 +12,17 @@ const ChooseDate = () => {
   const router = useRouter()
   const { locale } = router
   const t = locale === 'en' ? en : is
-  const bookingState = useBookingStore((state) => state.booking)
 
   const updateDepartureDate = useBookingStore((state) => state.updateDepartureDate)
 
-  const onSelectDate = (date: Date) => {
-    if (!bookingState.flightInformation.departureDate) {
-      return
-    }
+  const onSelectDate = (date: Date | undefined) => {
+    // react-day-picker fires onSelect(undefined) when the user clicks the
+    // already-selected date (single-mode toggle). Don't navigate in that
+    // case — keep them on the calendar so they can pick a real date.
+    // The previous version guarded on `bookingState.flightInformation.departureDate`
+    // which silently swallowed clicks when persisted state was missing/
+    // malformed (the bug that soft-blocked returning customers in prod).
+    if (!date) return
     updateDepartureDate(date)
     router.push(ApplicationRoutes.pages.chooseAirline)
   }

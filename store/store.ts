@@ -314,14 +314,85 @@ export const useBookingStore = create<BookingState>()(
       // starting over. The store survives the full page unload that happens
       // when we redirect to the Rapyd domain.
       name: 'bagbee-booking-store',
-      version: 1,
+      // v2: stop persisting `departureDate` / `pickupDate` — when a customer
+      // returned days later the stale dates pre-selected a now-disabled day
+      // on the calendar and effectively soft-blocked the booking flow. Dates
+      // always start fresh on each visit; the customer reselects (one extra
+      // click vs. broken UI). v2 also forces a clean slate for anyone whose
+      // localStorage has a v1 snapshot — those get discarded on first load.
+      version: 2,
       storage: createJSONStorage(() => localStorage, { reviver: reviveDates }),
-      // Drop transient lookup data that gets refetched on the next visit
-      // anyway — keeps localStorage payload small and avoids stale schedules.
+      // Drop transient lookup data + dates that go stale across visits.
       partialize: (state) => ({
-        booking: { ...state.booking, availableFlights: undefined },
-        fastTrack: { ...state.fastTrack, availableFlights: [] },
+        booking: {
+          ...state.booking,
+          availableFlights: undefined,
+          flightInformation: {
+            ...state.booking?.flightInformation,
+            departureDate: undefined,
+            arrivalDate: undefined,
+            selectedFlight: undefined,
+          },
+          pickupInformation: {
+            ...state.booking?.pickupInformation,
+            pickupDate: undefined,
+          },
+        },
+        fastTrack: {
+          ...state.fastTrack,
+          availableFlights: [],
+          flightInformation: {
+            ...state.fastTrack?.flightInformation,
+            departureDate: undefined,
+            arrivalDate: undefined,
+            selectedFlight: undefined,
+          },
+          departureDate: undefined,
+        },
       }),
+      // On rehydrate, defend against a stored snapshot that's missing
+      // expected shape (e.g. v1 leftover where booking is partial). Ensure
+      // dates default to fresh `new Date()` so the calendar never lands on
+      // a stale day. Without this, the date click-handler's guard silently
+      // ate clicks when the persisted state was malformed.
+      merge: (persisted: any, current) => {
+        const safe = { ...current }
+        if (persisted?.booking) {
+          safe.booking = {
+            ...current.booking,
+            ...persisted.booking,
+            flightInformation: {
+              ...current.booking.flightInformation,
+              ...(persisted.booking.flightInformation || {}),
+              departureDate: new Date(),
+              arrivalDate: '',
+              selectedFlight: undefined,
+            },
+            pickupInformation: {
+              ...current.booking.pickupInformation,
+              ...(persisted.booking.pickupInformation || {}),
+              pickupDate: new Date(),
+            },
+            availableFlights: undefined,
+          }
+        }
+        if (persisted?.fastTrack) {
+          safe.fastTrack = {
+            ...current.fastTrack,
+            ...persisted.fastTrack,
+            flightInformation: {
+              ...current.fastTrack.flightInformation,
+              ...(persisted.fastTrack.flightInformation || {}),
+              departureDate: new Date(),
+              arrivalDate: '',
+              selectedFlight: undefined,
+            },
+            departureDate: undefined,
+            availableFlights: [],
+          }
+        }
+        return safe
+      },
     },
   ),
 )
