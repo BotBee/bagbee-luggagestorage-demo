@@ -42,11 +42,65 @@ export const mapToPayment = (
   },
 })
 
+// Sanity-check the booking state before we write a row to Airtable.
+// Returns an array of human-readable problems (empty array = valid).
+// Caller can decide whether to throw or surface them in the UI.
+//
+// This exists because of an incident on 2026-04-29: a customer reached
+// confirm-order with a partially-cleared booking store, submitted, and
+// `dayjs(undefined)` silently filled in today's date for the missing
+// flight/pickup dates — producing an order routed for same-day pickup
+// with no name, email, phone, or flight number. The validator is the
+// first of three guards (this + server-side + UI pre-flight).
+export const validateBookingForOrder = (
+  bookingState: Booking,
+): string[] => {
+  const problems: string[] = []
+  const ci = bookingState?.customerInfo
+  const fi = bookingState?.flightInformation
+  const pi = bookingState?.pickupInformation
+
+  if (!ci?.name || ci.name.trim() === '') problems.push('customer name is missing')
+  if (!ci?.email || ci.email.trim() === '') problems.push('customer email is missing')
+  if (!ci?.phoneNumber || ci.phoneNumber.trim() === '') {
+    problems.push('customer phone number is missing')
+  }
+
+  const departureDate = fi?.departureDate
+  if (!(departureDate instanceof Date) || isNaN(departureDate.getTime())) {
+    problems.push('flight departure date is missing or invalid')
+  }
+  if (!fi?.airline?.name) problems.push('airline is missing')
+  if (!fi?.arrivalAirport?.iata) problems.push('arrival airport is missing')
+  if (!fi?.selectedFlight?.FlightNumber) problems.push('flight number is missing')
+
+  const pickupDate = pi?.pickupDate
+  if (!(pickupDate instanceof Date) || isNaN(pickupDate.getTime())) {
+    problems.push('pickup date is missing or invalid')
+  }
+  if (!pi?.pickupSlot || String(pi.pickupSlot).trim() === '') {
+    problems.push('pickup time slot is missing')
+  }
+  if (!pi?.pickupLocation || pi.pickupLocation.trim() === '') {
+    problems.push('pickup address is missing')
+  }
+
+  return problems
+}
+
 export const mapToOrder = (
   bookingState: Booking,
   locale: string,
   referrer: string,
 ): AirtableOrder => {
+  const problems = validateBookingForOrder(bookingState)
+  if (problems.length > 0) {
+    // Fail loud — better to break the booking than to silently write
+    // today's date and a half-empty record (see comment on
+    // validateBookingForOrder for the incident this guards against).
+    throw new Error(`Cannot create order — ${problems.join('; ')}`)
+  }
+
   const is100PercentDiscount = bookingState.customerInfo.discountCode?.discount === 100
   return {
     'Nafn viðskiptavinar': bookingState.customerInfo.name,

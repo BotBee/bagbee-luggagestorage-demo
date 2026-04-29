@@ -7,7 +7,7 @@ import { FormProvider, useForm } from 'react-hook-form'
 import toast, { Toaster } from 'react-hot-toast'
 import en from '../../common/locales/en'
 import is from '../../common/locales/is'
-import { mapToOrder } from '../../common/mapper'
+import { mapToOrder, validateBookingForOrder } from '../../common/mapper'
 import { Customer } from '../../common/types'
 import Button from '../../components/button/Button'
 import FormLayout from '../../components/form/FormLayout'
@@ -109,9 +109,31 @@ const ConfirmOrder = () => {
     updateCustomer(values)
 
     try {
+      // Read fresh state from the store. The hook-provided `bookingState` is
+      // a render-time snapshot — it doesn't see the customer values we just
+      // wrote with updateCustomer(values), and would silently drop them
+      // (the Apr 2026 partial-order incident).
+      const freshBooking = useBookingStore.getState().booking
+
+      // Pre-flight validation. If anything required is missing or any date
+      // is invalid, bail before we try to create the order. This catches
+      // partially-rehydrated stores and direct-URL deep-links that skip the
+      // earlier wizard steps. Server-side validation in /api/airtable/create
+      // is the second line of defence.
+      const problems = validateBookingForOrder(freshBooking)
+      if (problems.length > 0) {
+        console.warn('[confirm-order] booking incomplete, blocking submit', problems)
+        toast.error(
+          locale === 'en'
+            ? 'Some booking details are missing — please go back and complete the previous steps.'
+            : 'Það vantar upplýsingar í pöntunina — vinsamlegast farðu til baka og kláraðu fyrri skrefin.',
+        )
+        return
+      }
+
       // Create order in Airtable with payment status incomplete
       const order: Record<FieldSet> = await createOrder(
-        mapToOrder(bookingState, locale ?? '', referrer ?? ''),
+        mapToOrder(freshBooking, locale ?? '', referrer ?? ''),
       ).catch((error: Error) => {
         console.error('error')
         throw new Error(error.error, error.message, error.statusCode)
@@ -124,8 +146,10 @@ const ConfirmOrder = () => {
 
       if (order && order.id) {
         // validateStore(router.asPath, bookingState)
-        /** Send request to Rapyd */
-        const result = await makePayment(order.id, bookingState, locale ?? 'is')
+        /** Send request to Rapyd — use freshBooking so the discounted price
+         *  reflects what we just wrote to the order record (the render-time
+         *  bookingState snapshot can be one customer-update behind). */
+        const result = await makePayment(order.id, freshBooking, locale ?? 'is')
 
         /** Route user to Rapyd payment link */
         router.push(result.body.data.redirect_url)
