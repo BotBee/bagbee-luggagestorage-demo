@@ -69,19 +69,23 @@ const AvailablePickupTimes = () => {
 
   /** Must match API input; using this for the query key avoids a duplicate fetch when departureDate and selectedFlight hydrate at different times (e.g. pick-up deep link). */
   const scheduledDeparture = bookingState.flightInformation.selectedFlight?.ScheduledDateTime
+  // Postal code is part of the cache key so changing the address (e.g. from
+  // 270 Mosfellsbær to 101 Reykjavík) refetches with the new postcode rule.
+  // Empty string is fine here — server treats it as "no rule, capacity only".
+  const postalCode = bookingState.pickupInformation.postalCode ?? ''
 
   // dayBeforeDeparture is used when the user has a morning flight and will get a bag pick up the day before his departure
   let dayBeforeDeparture: Date = new Date(bookingState.flightInformation.departureDate)
   dayBeforeDeparture.setDate(bookingState.flightInformation.departureDate.getDate() - 1)
 
   const { data, isPending } = useQuery({
-    queryKey: ['available-pickup-times', scheduledDeparture],
+    queryKey: ['available-pickup-times', scheduledDeparture, postalCode],
     enabled: Boolean(scheduledDeparture),
     queryFn: () =>
       fetch('/api/airtable/availability', {
         method: 'POST',
         mode: 'cors',
-        body: JSON.stringify({ departureDate: scheduledDeparture }),
+        body: JSON.stringify({ departureDate: scheduledDeparture, postalCode }),
       })
         .then((res) => res.json())
         .catch(() => {

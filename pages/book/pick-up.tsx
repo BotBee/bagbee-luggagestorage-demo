@@ -108,8 +108,12 @@ const PickUp = () => {
     router.push(ApplicationRoutes.pages.personalInfo)
   }
 
-  const handlePlaceSelect = (address: string, placeName: string) => {
-    updatePickUpLocation(address, placeName)
+  const handlePlaceSelect = (
+    address: string,
+    placeName: string,
+    postalCode: string,
+  ) => {
+    updatePickUpLocation(address, placeName, postalCode)
   }
 
   // dayBeforeDeparture is used when the user has a morning flight and will get a bag pick up the day before his departure

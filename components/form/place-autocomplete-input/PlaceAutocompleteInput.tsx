@@ -16,10 +16,16 @@ const ADDRESS_AUTOCOMPLETE_LOCATION_RESTRICTION = {
 
 // Types for the Places Autocomplete Data API (not yet in @types/google.maps 3.50)
 interface SessionToken {}
+interface AddressComponent {
+  types?: string[]
+  shortText?: string
+  longText?: string
+}
 interface PlaceResult {
   fetchFields: (opts: { fields: string[] }) => Promise<void>
   formattedAddress?: string
   displayName?: string
+  addressComponents?: AddressComponent[]
 }
 interface FormattableText {
   text: string
@@ -128,7 +134,7 @@ export interface PlaceAutocompleteInputProps {
   apiKey: string
   placeholder?: string
   initialValue?: string
-  onPlaceSelect: (address: string, placeName: string) => void
+  onPlaceSelect: (address: string, placeName: string, postalCode: string) => void
 }
 
 export default function PlaceAutocompleteInput({
@@ -220,13 +226,21 @@ export default function PlaceAutocompleteInput({
 
     try {
       const place = await prediction.toPlace()
-      await place.fetchFields({ fields: ['displayName', 'formattedAddress'] })
+      await place.fetchFields({
+        fields: ['displayName', 'formattedAddress', 'addressComponents'],
+      })
       const address = place.formattedAddress ?? fallbackName
+      // Extract Iceland 3-digit postcode from Places addressComponents (the
+      // canonical source). Fall back to '' so the API gates by capacity only.
+      const postalComponent = place.addressComponents?.find((c) =>
+        c.types?.includes('postal_code'),
+      )
+      const postalCode = postalComponent?.shortText ?? postalComponent?.longText ?? ''
       setInputValue(address)
-      onPlaceSelectRef.current(address, place.displayName ?? fallbackName)
+      onPlaceSelectRef.current(address, place.displayName ?? fallbackName, postalCode)
     } catch {
       setInputValue(fallbackName)
-      onPlaceSelectRef.current(fallbackName, fallbackName)
+      onPlaceSelectRef.current(fallbackName, fallbackName, '')
     }
 
     // Rotate session token after each selection

@@ -1,5 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { getPickupConfig, getPickupConfigMatrix, getPickupTimes } from '../../../utils/airtable'
+import {
+  getPickupConfig,
+  getPickupConfigMatrix,
+  getPickupTimes,
+  getPostalCodeCutoffs,
+  parseSlotStartHour,
+} from '../../../utils/airtable'
 import { isMorningPickupPastBookingCutoff } from '../../../utils/morningPickupCutoff'
 import dayjs from 'dayjs'
 import mapValues from 'lodash/mapValues'
@@ -14,8 +20,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     let departureDate: string = ''
+    let postalCode: string = ''
     try {
-      departureDate = JSON.parse(req.body)?.departureDate
+      const body = JSON.parse(req.body)
+      departureDate = body?.departureDate
+      // postalCode is optional — empty/unknown → no postcode rule applied,
+      // capacity-only check (today's behaviour). Server validates on submit.
+      const rawPostal = body?.postalCode
+      postalCode = typeof rawPostal === 'string' ? rawPostal.trim() : ''
     } catch (error) {
       console.error('[api][availability] invalid body', req.body)
       return res.status(400).json({ error: 'Invalid body' })
@@ -66,6 +78,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `${pickupTime.fields['Dagsetning pick-up']}/${pickupTime.fields['Tímasetning']}`,
     )
 
+    // Postal-code rule lookup. Empty string / unknown postcode → no rule
+    // applies (legacy behaviour: capacity-only check). Currently only applied
+    // to evening slots; morning slots are unrestricted by postcode for now.
+    const postalCodeRules = await getPostalCodeCutoffs()
+    const postalRule = postalCode ? postalCodeRules[postalCode] : undefined
+    const isUnserviced = postalRule ? postalRule.service === false : false
+    const earliestStartHour = postalRule ? postalRule.earliestSlotStartHour : null
+    const latestStartHour = postalRule ? postalRule.latestSlotStartHour : null
+
+    // The 3-hour "any-time" 19:00 - 22:00 slot is exempt from earliest/latest
+    // cutoffs — it covers the full evening window so the driver can swing by
+    // whenever they're in the area. This matches the "also 19:00-22:00"
+    // column in the postcode rules table (every serviced row keeps it on).
+    const ANY_TIME_SLOT = '19:00 - 22:00'
+
+    const slotPassesPostalRule = (slotKey: string): boolean => {
+      if (isUnserviced) return false
+      const slotLabel = slotKey.split('/')[1] ?? ''
+      if (slotLabel === ANY_TIME_SLOT) return true
+      const slotStartHour = parseSlotStartHour(slotLabel)
+      if (slotStartHour == null) return true
+      if (earliestStartHour != null && slotStartHour < earliestStartHour) return false
+      if (latestStartHour != null && slotStartHour > latestStartHour) return false
+      return true
+    }
+
     // check if the number of pickups for a given timeslot is less than the max
     const timeslots = {
       morningSlots: mapValues(morningSlots, (_, key) => {
@@ -75,11 +113,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // If it's same day, don't allow morning slots
         if (slotDate.isSame(currentTime, 'day')) return false
         if (isMorningPickupPastBookingCutoff(slotDate)) return false
+        // If the postcode is unserviced, hide morning slots too (driver
+        // doesn't go there at all). Time-based cutoffs only apply to evening
+        // slots, so we skip the cutoff check here.
+        if (isUnserviced) return false
         return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
       }),
       eveningSlots: mapValues(eveningSlots, (_, key) => {
         const maxPickups = pickupConfigMatrix[key] || defaultTimeslotMax
         if (maxPickups <= 0) return false
+        if (!slotPassesPostalRule(key)) return false
         return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
       }),
     }

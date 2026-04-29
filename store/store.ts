@@ -28,7 +28,8 @@ interface BookingState {
   updatePickupDate: (pickupDate: PickupInformation['pickupDate']) => void
   updatePickupLocation: (
     pickupLocation: PickupInformation['pickupLocation'],
-    hotelName: PickupInformation['hotelName']
+    hotelName: PickupInformation['hotelName'],
+    postalCode?: PickupInformation['postalCode']
   ) => void
   handleBaggage: (amount: number) => void
   handleOddsize: (oddSizeAmount: number) => void
@@ -54,6 +55,7 @@ export const useBookingStore = create<BookingState>((set) => ({
     pickupInformation: {
       pickupSlot: '',
       pickupLocation: '',
+      postalCode: '',
       deliveryAddress: 'Keflavíkurflugvöllur',
       comments: '',
       hotelName: '',
@@ -101,7 +103,8 @@ export const useBookingStore = create<BookingState>((set) => ({
   },
   updatePickupLocation: (
     pickupLocation: PickupInformation['pickupLocation'],
-    hotelName: PickupInformation['hotelName']
+    hotelName: PickupInformation['hotelName'],
+    postalCode?: PickupInformation['postalCode']
   ) => {
     set((state) => ({
       ...state,
@@ -111,6 +114,9 @@ export const useBookingStore = create<BookingState>((set) => ({
           ...state.booking.pickupInformation,
           pickupLocation,
           hotelName,
+          // Preserve the previous postalCode if the caller doesn't supply one
+          // (e.g. a deep-link query that only gave us an address string).
+          ...(postalCode !== undefined ? { postalCode } : {}),
         },
       },
     }))

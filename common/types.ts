@@ -186,6 +186,9 @@ export type PickupInformation = {
   pickupSlot: string
   hotelName: string
   pickupLocation: string
+  // 3-digit Iceland postcode captured from Google Places addressComponents.
+  // Empty string when unknown — server falls back to capacity-only check.
+  postalCode?: string
   comments: string
   pickupDate: Date
   deliveryAddress: 'Keflavíkurflugvöllur'

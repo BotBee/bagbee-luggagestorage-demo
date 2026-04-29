@@ -96,6 +96,94 @@ const getPickupConfigMatrix = async (defaultTimeslotMax: number) => {
 }
 
 /**
+ * Postal-code cutoffs for evening pickup slots.
+ *
+ * Source of truth: Airtable table `Postal Code Cutoffs` in the same base.
+ * Schema: Postal code (primary), Region, Service (checkbox),
+ * Earliest pickup slot (singleSelect), Latest pickup slot (singleSelect:
+ * '17:00 - 18:00' | '18:00 - 19:00' | '19:00 - 20:00' | '20:00 - 21:00' |
+ * '21:00 - 22:00' | 'Any'), Notes.
+ *
+ * The driver runs an evening route BSÍ → 170 → 102 → 105 → 200 → 210 → 220 →
+ * 230 → KEF; some postcodes can't be reached early (driver hasn't arrived
+ * yet) and some can't be reached late (driver has already passed). Ops edit
+ * the table to change cutoffs without redeploys.
+ *
+ * Cache: in-memory, module-scoped, 5-minute TTL. Each Next.js serverless
+ * cold-start re-fetches; this is fine for ops workflow (changes are visible
+ * within 5 minutes of being saved).
+ */
+export type PostalCodeRule = {
+  postalCode: string
+  service: boolean
+  // Start hour of the earliest allowed evening slot, e.g. '19:00 - 20:00' → 19.
+  // The driver can't reach this postcode before this hour — slots starting
+  // earlier are filtered out. null means no earliest restriction.
+  earliestSlotStartHour: number | null
+  // Start hour of the latest allowed evening slot, e.g. '20:00 - 21:00' → 20.
+  // null means no time-based restriction (Service is on, all evening slots
+  // allowed by this rule — capacity check still applies separately).
+  latestSlotStartHour: number | null
+}
+
+const POSTAL_CODE_CUTOFFS_TTL_MS = 5 * 60 * 1000
+let cachedPostalCodeRules: { rules: Record<string, PostalCodeRule>; fetchedAt: number } | null = null
+
+const parseSlotStartHour = (slotLabel: string | undefined | null): number | null => {
+  if (!slotLabel || slotLabel === 'Any') return null
+  // Slot labels look like '20:00 - 21:00' / '19:00 - 22:00'. Extract the
+  // first hour (the start). Anything that doesn't match returns null so a
+  // misconfigured row in Airtable degrades to "no restriction" instead of
+  // silently blocking everything.
+  const match = /^(\d{1,2}):/.exec(slotLabel.trim())
+  if (!match) return null
+  const hour = parseInt(match[1], 10)
+  return Number.isFinite(hour) ? hour : null
+}
+
+const getPostalCodeCutoffs = async (): Promise<Record<string, PostalCodeRule>> => {
+  const now = Date.now()
+  if (cachedPostalCodeRules && now - cachedPostalCodeRules.fetchedAt < POSTAL_CODE_CUTOFFS_TTL_MS) {
+    return cachedPostalCodeRules.rules
+  }
+
+  try {
+    const base = getBase()
+    const records = await base('Postal Code Cutoffs')
+      .select({ fields: ['Postal code', 'Service', 'Latest pickup slot', 'Earliest pickup slot'] })
+      .all()
+
+    const rules: Record<string, PostalCodeRule> = {}
+    for (const record of records) {
+      const postalCode = record.fields['Postal code']
+      if (typeof postalCode !== 'string' || postalCode.trim() === '') continue
+      const rawLatest = record.fields['Latest pickup slot']
+      const latestSlot = typeof rawLatest === 'string' ? rawLatest : null
+      const rawEarliest = record.fields['Earliest pickup slot']
+      const earliestSlot = typeof rawEarliest === 'string' ? rawEarliest : null
+      rules[postalCode.trim()] = {
+        postalCode: postalCode.trim(),
+        // Airtable checkboxes return true/undefined; treat anything other
+        // than the explicit `false` value as serviced. The doc default is
+        // checkbox = ON, so unrolled rows imply serviced.
+        service: record.fields['Service'] !== false,
+        earliestSlotStartHour: parseSlotStartHour(earliestSlot),
+        latestSlotStartHour: parseSlotStartHour(latestSlot),
+      }
+    }
+
+    cachedPostalCodeRules = { rules, fetchedAt: now }
+    return rules
+  } catch (error) {
+    // If Airtable is unreachable or the table was renamed, fall back to "no
+    // rules" — every postal code is treated as fully serviced. Capacity-only
+    // check still applies, server validates on submit.
+    console.error('[getPostalCodeCutoffs] failed to load, falling back to no rules', error)
+    return {}
+  }
+}
+
+/**
  * Get pickup times for paid orders only (capacity excludes unpaid bookings).
  */
 const getPickupTimes = async () => {
@@ -163,6 +251,8 @@ export {
   getMinifiedItem,
   getBase,
   getPickupTimes,
+  getPostalCodeCutoffs,
+  parseSlotStartHour,
   getFastTrackTable,
   getOrdersLookupTable,
   getTagNumbersTable,
