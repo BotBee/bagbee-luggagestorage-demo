@@ -902,6 +902,7 @@ const OrderPage = ({
 
 export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
   params,
+  query,
 }) => {
   const orderNo = params?.orderNo as string
   if (!orderNo) {
@@ -912,6 +913,23 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:3000'
+
+    // Customer just paid → flip Greitt: true on the Airtable record now,
+    // before fetching the order data. The Rapyd webhook will also do this
+    // (idempotent) but races the redirect — without this call the page can
+    // render "Pending" on a paid order. Setting Greitt is enough; the
+    // Order Status formula auto-flips to "Confirmed".
+    if (query?.paid === 'true') {
+      try {
+        await fetch(`${baseUrl}/api/airtable/mark-paid-by-order-no`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderNo }),
+        })
+      } catch (err) {
+        console.warn('[orders] mark-paid pre-render failed (webhook will catch it)', err)
+      }
+    }
 
     const orderRes = await fetch(
       `${baseUrl}/api/airtable/read-by-order-no?orderNo=${orderNo}`
