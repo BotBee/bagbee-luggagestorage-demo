@@ -139,6 +139,17 @@ const successStep = {
     'Thank you for ordering the BagBee service. We have sent you an e-mail with further information. If you have further questions, please see www.bagbee.is for information and contact options',
 }
 
+const cancelStep = {
+  title: 'Payment unsuccessful',
+  message:
+    "Something went wrong with the payment. You can retry the payment for the same order, or start a new booking from scratch.",
+  retryButton: 'Retry payment',
+  backToBookingButton: 'Back to booking',
+  startOverButton: 'Start a new booking',
+  retryError: "Couldn't restart the payment. Please try again or contact BagBee.",
+  alreadyPaidNotice: 'This order has already been paid.',
+}
+
 const loadingScreen = {
   loadingFlightsText: 'Fetching flights',
   loadingOrderCompleteText: 'finishing up your booking..',
@@ -251,6 +262,7 @@ const en = {
   pickUpStep,
   confirmOrderStep,
   successStep,
+  cancelStep,
   loadingScreen,
   priceCalculator,
   aboutPage,

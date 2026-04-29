@@ -140,6 +140,17 @@ const successStep = {
     'Takk fyrir að panta hjá Bagbee! Við munum senda þér skilaboð þegar nær dregur, ef þú hefur einhverjar spurningar um þjónustu okkar getur þú alltaf haft samband í síma, í gegnum tölvupóst eða á spjallinu',
 }
 
+const cancelStep = {
+  title: 'Greiðsla mistókst',
+  message:
+    'Eitthvað fór úrskeiðis við greiðsluna. Þú getur reynt aftur með pöntunina þína eða farið aftur á forsíðu og byrjað upp á nýtt.',
+  retryButton: 'Reyna greiðslu aftur',
+  backToBookingButton: 'Til baka að bókun',
+  startOverButton: 'Byrja nýja bókun',
+  retryError: 'Ekki tókst að ræsa greiðslu. Reyndu aftur eða hafðu samband við BagBee.',
+  alreadyPaidNotice: 'Þessi pöntun hefur þegar verið greidd.',
+}
+
 const loadingScreen = {
   loadingFlightsText: 'Fetching flights',
   loadingOrderCompleteText: 'erum að klára pöntunina þína..',
@@ -254,6 +265,7 @@ const is = {
   pickUpStep,
   confirmOrderStep,
   successStep,
+  cancelStep,
   loadingScreen,
   priceCalculator,
   aboutPage,

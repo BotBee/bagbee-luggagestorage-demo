@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import {
   Airline,
   Airport,
@@ -38,7 +39,22 @@ interface BookingState {
   updateFastTrack: (fastTrack: Partial<FastTrackBooking>) => void
 }
 
-export const useBookingStore = create<BookingState>((set) => ({
+// Reviver runs on every property when rehydrating from localStorage so we
+// can rebuild Date instances. JSON serialises Date → ISO string and the rest
+// of the app expects real Date objects (e.g. `.toLocaleDateString()`).
+// Be conservative — only revive keys we know are dates so we don't mistake
+// a future ISO-shaped string in some other field.
+const DATE_KEYS = new Set(['departureDate', 'pickupDate'])
+const reviveDates = (key: string, value: unknown): unknown => {
+  if (DATE_KEYS.has(key) && typeof value === 'string') {
+    return new Date(value)
+  }
+  return value
+}
+
+export const useBookingStore = create<BookingState>()(
+  persist(
+    (set) => ({
   booking: {
     customerInfo: {
       name: '',
@@ -290,4 +306,22 @@ export const useBookingStore = create<BookingState>((set) => ({
         ...fastTrack,
       },
     })),
-}))
+    }),
+    {
+      // Persist the booking + fast-track state to localStorage so a customer
+      // who is bounced back from Rapyd's hosted checkout (success, cancel,
+      // tab refresh, accidental close) can resume their booking instead of
+      // starting over. The store survives the full page unload that happens
+      // when we redirect to the Rapyd domain.
+      name: 'bagbee-booking-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage, { reviver: reviveDates }),
+      // Drop transient lookup data that gets refetched on the next visit
+      // anyway — keeps localStorage payload small and avoids stale schedules.
+      partialize: (state) => ({
+        booking: { ...state.booking, availableFlights: undefined },
+        fastTrack: { ...state.fastTrack, availableFlights: [] },
+      }),
+    },
+  ),
+)

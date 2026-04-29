@@ -5,10 +5,12 @@ import styled from '@emotion/styled'
 
 import * as animationData from '../../public/lottie/checkmark.json'
 import { useRouter } from 'next/router'
+import { useEffect } from 'react'
 import is from '../../common/locales/is'
 import en from '../../common/locales/en'
 import { GetStaticProps, InferGetStaticPropsType } from 'next'
 import { getNavigation } from '../../modules/contentful/api'
+import { useBookingStore } from '../../store/store'
 
 const Container = styled.div`
   display: flex;
@@ -31,6 +33,15 @@ const Success = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>)
     animationData: animationData,
     rendererSettings: {},
   }
+
+  // Booking is paid — drop the persisted booking-store snapshot so the
+  // customer doesn't see a stale half-filled wizard if they come back to
+  // /book days later. Only fires after a confirmed payment landing.
+  useEffect(() => {
+    if (typeof recordId === 'string' && recordId) {
+      useBookingStore.persist.clearStorage()
+    }
+  }, [recordId])
 
   return (
     <>

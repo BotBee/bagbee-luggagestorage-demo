@@ -23,7 +23,10 @@ export const mapToPayment = (
   language: 'EN',
   merchant_reference_id: 'bagbee',
   complete_payment_url: `https://${window.location.host}/${locale}/payment/success?recordId=${recordId}`,
-  error_payment_url: `https://${window.location.host}/${locale}/payment/cancel`,
+  // Carry recordId + tableType through to the cancel page so it can offer
+  // a one-click "Retry payment" against the same Airtable record without
+  // forcing the customer to redo the wizard.
+  error_payment_url: `https://${window.location.host}/${locale}/payment/cancel?recordId=${recordId}&type=${tableType}`,
   metadata: {
     recordId,
     tableType,
