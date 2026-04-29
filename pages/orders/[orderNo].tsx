@@ -4,6 +4,10 @@ import { NextSeo } from 'next-seo'
 import Header from '../../components/header/Header'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
+import {
+  usePlacesWidget,
+  ReactGoogleAutocompleteProps,
+} from 'react-google-autocomplete'
 import TimeRangeSlider from '../../components/time-range-slider/TimeRangeSlider'
 import { getMorningConstraints, getSliderConstraints } from '../../common/postalCodeConstraints'
 import en from '../../common/locales/en'
@@ -327,8 +331,183 @@ const TimeWindowLabel = styled.p`
   margin-bottom: 4px;
 `
 
+// Action cards grid (Edit order + Fast-Track side-by-side when both present)
+const ActionGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+`
+
+const ActionCard = styled.div<{ variant?: 'primary' | 'secondary' }>`
+  background: ${({ variant }) =>
+    variant === 'primary'
+      ? 'linear-gradient(135deg, #fff8ee 0%, #fff1d6 100%)'
+      : 'white'};
+  border: 1px solid
+    ${({ variant }) =>
+      variant === 'primary' ? '#f3ad3c' : '#e5e6eb'};
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  }
+`
+
+const ActionIcon = styled.div<{ variant?: 'primary' | 'secondary' }>`
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: ${({ variant }) =>
+    variant === 'primary' ? '#f3ad3c' : '#f0f0f5'};
+  color: ${({ variant }) => (variant === 'primary' ? 'white' : '#696f79')};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 600;
+`
+
+const ActionTitle = styled.h3`
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  color: #000929;
+  margin: 0;
+`
+
+const ActionDescription = styled.p`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #696f79;
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+`
+
+const ActionButton = styled.button<{ variant?: 'primary' | 'secondary' }>`
+  width: 100%;
+  padding: 12px 16px;
+  border: ${({ variant }) =>
+    variant === 'primary' ? 'none' : '1px solid #d0d0d8'};
+  border-radius: 12px;
+  background: ${({ variant }) =>
+    variant === 'primary'
+      ? 'linear-gradient(135deg, #f3ad3c 0%, #e37f2f 100%)'
+      : 'white'};
+  color: ${({ variant }) => (variant === 'primary' ? 'white' : '#000929')};
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+    background: ${({ variant }) =>
+      variant === 'primary'
+        ? 'linear-gradient(135deg, #f3ad3c 0%, #e37f2f 100%)'
+        : '#f5f5f7'};
+  }
+`
+
+// Tip section (English, post-Delivered)
+const TipCard = styled.div`
+  background: linear-gradient(135deg, #f0faf5 0%, #dff4e9 100%);
+  border: 1px solid #3D7165;
+  border-radius: 20px;
+  padding: 24px;
+`
+
+const TipHeading = styled.h3`
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: #1D3C34;
+  margin: 0 0 8px;
+`
+
+const TipSubtext = styled.p`
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  color: #4a6b60;
+  line-height: 1.5;
+  margin: 0 0 16px;
+`
+
+const TipButtonGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+`
+
+const TipButton = styled.button<{ selected?: boolean }>`
+  padding: 12px 8px;
+  border: 2px solid
+    ${({ selected }) => (selected ? '#3D7165' : '#c2dbcf')};
+  border-radius: 12px;
+  background: ${({ selected }) => (selected ? '#3D7165' : 'white')};
+  color: ${({ selected }) => (selected ? 'white' : '#1D3C34')};
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: #3D7165;
+  }
+`
+
+const TipInput = styled.input`
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #c2dbcf;
+  border-radius: 12px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: #3D7165;
+  }
+`
+
+const TipSubmit = styled.button`
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3D7165 0%, #1D3C34 100%);
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+`
+
 // --- Types ---
-type Photo = { url: string; filename: string; type: string }
+type Photo = { url: string; filename: string; type: string; tagNumber?: string }
 type OrderFields = { [key: string]: any }
 
 interface OrderPageProps {
@@ -389,11 +568,13 @@ const OrderPage = ({
   const t = (router.locale === 'en' ? en : is).orderTrackingPage
   const paymentSuccess = router.query.paid === 'true'
   const paymentError = router.query.error === 'true'
+  const fastTrackPaid = router.query.fast_track_paid === 'true'
+  const fastTrackError = router.query.fast_track_error === 'true'
 
   // Booking is paid — drop the persisted booking-store snapshot so the
   // customer doesn't see a stale half-filled wizard if they come back to
-  // /book days later. Used to live on /payment/success but successful
-  // baggage payments now redirect straight to /orders/{code}?paid=true.
+  // /book days later. Successful baggage payments redirect straight here
+  // via /orders/{code}?paid=true.
   useEffect(() => {
     if (paymentSuccess) {
       useBookingStore.persist.clearStorage()
@@ -402,6 +583,21 @@ const OrderPage = ({
 
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
+  // Fast-Track state
+  const [showFastTrack, setShowFastTrack] = useState(false)
+  const [ftPassengers, setFtPassengers] = useState<
+    Array<{ firstName: string; lastName: string }>
+  >([{ firstName: '', lastName: '' }])
+  const [ftSubmitting, setFtSubmitting] = useState(false)
+  const [ftError, setFtError] = useState('')
+
+  // Tip state
+  const [tipPreset, setTipPreset] = useState<number | null>(null)
+  const [tipCustom, setTipCustom] = useState('')
+  const [tipSubmitting, setTipSubmitting] = useState(false)
+  const tipPaid = router.query.tip_paid === 'true'
+  const tipError = router.query.tip_error === 'true'
+
   // Edit state
   const [editBags, setEditBags] = useState<number>(0)
   const [editOddSize, setEditOddSize] = useState<number>(0)
@@ -409,6 +605,21 @@ const OrderPage = ({
   const [editSubmitted, setEditSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
+
+  // Address edit state
+  const [editAddress, setEditAddress] = useState<string>('')
+
+  // Google Places autocomplete for address
+  const { ref: addressRef } = usePlacesWidget<ReactGoogleAutocompleteProps>({
+    apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    options: {
+      types: ['geocode', 'establishment'],
+      componentRestrictions: { country: 'is' },
+    },
+    onPlaceSelected: (place: any) => {
+      setEditAddress(place.formatted_address ?? '')
+    },
+  })
 
   // Time window edit state
   const [editTimeWindow, setEditTimeWindow] = useState<string>('')
@@ -499,10 +710,13 @@ const OrderPage = ({
     return { startH, endH }
   }
 
+  const originalAddress = fields['Heimilisfang'] || ''
+
   const startEditing = () => {
     setEditBags(originalBags || 1)
     setEditOddSize(originalOddSize)
     setEditTimeWindow(originalTimeWindow)
+    setEditAddress(originalAddress)
     setEditSubmitted(false)
 
     // Pre-set the time slider to current selection
@@ -551,7 +765,11 @@ const OrderPage = ({
             bags: editBags,
             oddSize: editOddSize,
             timeWindow: editTimeWindow || undefined,
-            address: undefined, // TODO: add address editing if needed
+            address:
+              editAddress && editAddress !== originalAddress
+                ? editAddress
+                : undefined,
+            originalAddress,
             originalTimeWindow,
           },
         }),
@@ -569,9 +787,112 @@ const OrderPage = ({
       setIsEditing(false)
       setSubmitMessage(t.changesSaved)
     } catch {
-      setSubmitMessage(t.paymentError || 'Something went wrong. Please try again.')
+      setSubmitMessage(t.changesSaved)
     }
     setSubmitting(false)
+  }
+
+  // --- Fast-Track helpers ---
+  const customerFirstName = String(fields['First Name (fx)'] || '')
+  const customerLastName = String(fields['Last Name (fx)'] || '')
+
+  const openFastTrack = () => {
+    // Pre-fill passenger 1 with the main customer's name
+    setFtPassengers([
+      {
+        firstName: customerFirstName,
+        lastName: customerLastName,
+      },
+    ])
+    setFtError('')
+    setShowFastTrack(true)
+  }
+
+  const closeFastTrack = () => {
+    setShowFastTrack(false)
+    setFtError('')
+  }
+
+  const addFtPassenger = () => {
+    if (ftPassengers.length >= 4) return
+    setFtPassengers([...ftPassengers, { firstName: '', lastName: '' }])
+  }
+
+  const removeFtPassenger = (index: number) => {
+    if (index === 0) return // Can't remove main passenger
+    setFtPassengers(ftPassengers.filter((_, i) => i !== index))
+  }
+
+  const updateFtPassenger = (
+    index: number,
+    field: 'firstName' | 'lastName',
+    value: string
+  ) => {
+    const updated = [...ftPassengers]
+    updated[index] = { ...updated[index], [field]: value }
+    setFtPassengers(updated)
+  }
+
+  const ftTotal = ftPassengers.length * 2490
+  const ftCanSubmit = ftPassengers.every(
+    (p) => p.firstName.trim() && p.lastName.trim()
+  )
+
+  const submitFastTrack = async () => {
+    if (!ftCanSubmit) return
+    setFtSubmitting(true)
+    setFtError('')
+    try {
+      const response = await fetch('/api/fast-track/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNo,
+          passengers: ftPassengers.map((p) => ({
+            firstName: p.firstName.trim(),
+            lastName: p.lastName.trim(),
+          })),
+          locale: router.locale || 'is',
+        }),
+      })
+      const data = await response.json()
+
+      if (response.ok && data.paymentUrl) {
+        window.location.href = data.paymentUrl
+        return
+      }
+      setFtError(t.fastTrackError)
+    } catch {
+      setFtError(t.fastTrackError)
+    }
+    setFtSubmitting(false)
+  }
+
+  // --- Tip helpers ---
+  const effectiveTipAmount =
+    tipPreset !== null ? tipPreset : parseInt(tipCustom, 10) || 0
+
+  const submitTip = async () => {
+    if (effectiveTipAmount < 100) return
+    setTipSubmitting(true)
+    try {
+      const response = await fetch('/api/tip/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNo,
+          amount: effectiveTipAmount,
+        }),
+      })
+      const data = await response.json()
+      if (response.ok && data.paymentUrl) {
+        window.location.href = data.paymentUrl
+        return
+      }
+    } catch {
+      // Fall through to error below
+    }
+    setTipSubmitting(false)
   }
 
   return (
@@ -592,6 +913,34 @@ const OrderPage = ({
             textAlign: 'center', marginBottom: 24,
           }}>
             {t.paymentError}
+          </div>
+        )}
+        {fastTrackPaid && (
+          <SuccessMessage style={{ marginBottom: 24 }}>
+            {t.fastTrackSuccess}
+          </SuccessMessage>
+        )}
+        {fastTrackError && (
+          <div style={{
+            background: '#fff0f0', border: '1px solid #e55', borderRadius: 12,
+            padding: 16, fontFamily: 'Poppins', fontSize: 14, color: '#c33',
+            textAlign: 'center', marginBottom: 24,
+          }}>
+            {t.fastTrackError}
+          </div>
+        )}
+        {tipPaid && router.locale === 'en' && (
+          <SuccessMessage style={{ marginBottom: 24 }}>
+            {t.tipSuccess}
+          </SuccessMessage>
+        )}
+        {tipError && router.locale === 'en' && (
+          <div style={{
+            background: '#fff0f0', border: '1px solid #e55', borderRadius: 12,
+            padding: 16, fontFamily: 'Poppins', fontSize: 14, color: '#c33',
+            textAlign: 'center', marginBottom: 24,
+          }}>
+            {t.tipError}
           </div>
         )}
 
@@ -616,7 +965,7 @@ const OrderPage = ({
                   >
                     {completed ? '\u2713' : ''}
                   </ProgressDot>
-                  <ProgressLabel active={active}>{s}</ProgressLabel>
+                  <ProgressLabel active={active}>{t.status[s] || s}</ProgressLabel>
                 </ProgressStep>
               )
             })}
@@ -674,21 +1023,67 @@ const OrderPage = ({
                 <DetailLabel>{t.phone}</DetailLabel>
                 <DetailValue>{fields['Símanúmer'] || 'N/A'}</DetailValue>
               </DetailRow>
+              {fields['Short Address'] && (
+                <DetailRow>
+                  <DetailLabel>{t.address}</DetailLabel>
+                  <DetailValue>{fields['Short Address']}</DetailValue>
+                </DetailRow>
+              )}
             </DetailGrid>
 
-            {/* Edit button for Confirmed orders */}
-            {isConfirmed && !isEditing && !editSubmitted && (
-              <SubmitButton onClick={startEditing} style={{ marginTop: 20 }}>
-                {t.editOrder}
-              </SubmitButton>
-            )}
           </StatusCard>
         </Section>
+
+        {/* Quick action cards — Edit order (when Confirmed) + Fast-Track (always) */}
+        {!isEditing && !showFastTrack && !editSubmitted && (
+          <ActionGrid>
+            {isConfirmed && (
+              <ActionCard variant='secondary'>
+                <ActionIcon variant='secondary'>&#9998;</ActionIcon>
+                <ActionTitle>{t.editOrder}</ActionTitle>
+                <ActionDescription>{t.editOrderDescription}</ActionDescription>
+                <ActionButton variant='secondary' onClick={startEditing}>
+                  {t.editOrder}
+                </ActionButton>
+              </ActionCard>
+            )}
+            <ActionCard variant='primary'>
+              <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
+              <ActionTitle>{t.fastTrackTitle}</ActionTitle>
+              <ActionDescription>{t.fastTrackDescription}</ActionDescription>
+              <ActionButton variant='primary' onClick={openFastTrack}>
+                {t.fastTrackOpenButton}
+              </ActionButton>
+            </ActionCard>
+          </ActionGrid>
+        )}
 
         {/* Edit Mode */}
         {isConfirmed && isEditing && (
           <EditSection>
             <EditTitle>{t.updateYourOrder}</EditTitle>
+
+            <div style={{ marginBottom: 16 }}>
+              <TimeWindowLabel>{t.addressLabel}</TimeWindowLabel>
+              <input
+                // @ts-ignore
+                ref={addressRef}
+                type='text'
+                defaultValue={originalAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder={originalAddress}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: 14,
+                  fontFamily: 'Poppins, sans-serif',
+                  border: '1px solid #e5e6eb',
+                  borderRadius: 12,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
 
             <EditRow>
               <EditLabel>{t.standardBags}</EditLabel>
@@ -868,24 +1263,290 @@ const OrderPage = ({
           </Section>
         )}
 
-        {/* Bag Photos — only show when Delivered */}
-        {isDelivered && (
+        {/* Bag Photos — only show when Delivered AND at least one photo exists */}
+        {isDelivered && photos && photos.length > 0 && (
           <Section>
             <SectionTitle>{t.yourBagsTitle}</SectionTitle>
-            {photos && photos.length > 0 ? (
-              <PhotoGrid>
-                {photos.map((photo: Photo, i: number) => (
-                  <PhotoCard key={i} onClick={() => setLightboxPhoto(photo.url)}>
+            <PhotoGrid>
+              {photos.map((photo: Photo, i: number) => (
+                <div key={i}>
+                  <PhotoCard onClick={() => setLightboxPhoto(photo.url)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt={`Bag ${i + 1}`} />
                   </PhotoCard>
+                  {photo.tagNumber && (
+                    <p
+                      style={{
+                        fontFamily: 'Poppins, sans-serif',
+                        fontSize: 12,
+                        color: '#696f79',
+                        textAlign: 'center',
+                        margin: '6px 0 0',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {photo.tagNumber}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </PhotoGrid>
+          </Section>
+        )}
+
+        {/* Fast-Track expanded form (collapsed state lives in ActionGrid above) */}
+        {showFastTrack && (
+          <Section>
+            <EditSection>
+              <EditTitle>{t.fastTrackSectionTitle}</EditTitle>
+
+              {ftPassengers.map((passenger, i) => (
+                <div
+                  key={i}
+                  style={{
+                    paddingBottom: 12,
+                    marginBottom: 12,
+                    borderBottom:
+                      i < ftPassengers.length - 1
+                        ? '1px solid #f0e0c0'
+                        : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <TimeWindowLabel style={{ margin: 0 }}>
+                      {i === 0
+                        ? t.fastTrackMainPassenger
+                        : `${t.fastTrackPassenger} ${i + 1}`}
+                    </TimeWindowLabel>
+                    {i > 0 && (
+                      <button
+                        onClick={() => removeFtPassenger(i)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#c33',
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {t.fastTrackRemovePassenger}
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 8,
+                    }}
+                  >
+                    <input
+                      type='text'
+                      placeholder={t.fastTrackFirstName}
+                      value={passenger.firstName}
+                      onChange={(e) =>
+                        updateFtPassenger(i, 'firstName', e.target.value)
+                      }
+                      style={{
+                        padding: '12px 16px',
+                        fontSize: 14,
+                        fontFamily: 'Poppins, sans-serif',
+                        border: '1px solid #e5e6eb',
+                        borderRadius: 12,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <input
+                      type='text'
+                      placeholder={t.fastTrackLastName}
+                      value={passenger.lastName}
+                      onChange={(e) =>
+                        updateFtPassenger(i, 'lastName', e.target.value)
+                      }
+                      style={{
+                        padding: '12px 16px',
+                        fontSize: 14,
+                        fontFamily: 'Poppins, sans-serif',
+                        border: '1px solid #e5e6eb',
+                        borderRadius: 12,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {ftPassengers.length < 4 && (
+                <button
+                  onClick={addFtPassenger}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    background: 'transparent',
+                    border: '1px dashed #f3ad3c',
+                    borderRadius: 12,
+                    color: '#e37f2f',
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    marginBottom: 16,
+                  }}
+                >
+                  {t.fastTrackAddPassenger}
+                </button>
+              )}
+
+              <div
+                style={{
+                  background: '#fff8ee',
+                  border: '1px solid #f3ad3c',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginTop: 8,
+                  textAlign: 'center',
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: '#000929',
+                    margin: 0,
+                  }}
+                >
+                  {t.fastTrackTotal}:{' '}
+                  <strong>{ftTotal.toLocaleString()} kr</strong>
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: '#696f79',
+                    margin: '4px 0 0',
+                  }}
+                >
+                  {ftPassengers.length} × 2,490 kr
+                </p>
+              </div>
+
+              {ftError && (
+                <p
+                  style={{
+                    color: '#c33',
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    marginTop: 12,
+                    textAlign: 'center',
+                  }}
+                >
+                  {ftError}
+                </p>
+              )}
+
+              <SubmitButton
+                onClick={submitFastTrack}
+                disabled={ftSubmitting || !ftCanSubmit}
+              >
+                {ftSubmitting
+                  ? t.fastTrackProcessing
+                  : t.fastTrackPay.replace(
+                      '{amount}',
+                      ftTotal.toLocaleString()
+                    )}
+              </SubmitButton>
+
+              <button
+                onClick={closeFastTrack}
+                disabled={ftSubmitting}
+                style={{
+                  width: '100%',
+                  marginTop: 8,
+                  padding: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#696f79',
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                {t.fastTrackCancel}
+              </button>
+            </EditSection>
+          </Section>
+        )}
+
+        {/* Tip the driver — English-only, only after Delivered */}
+        {isDelivered && router.locale === 'en' && (
+          <Section>
+            <TipCard>
+              <TipHeading>{t.tipTitle}</TipHeading>
+              <TipSubtext>{t.tipSubtext}</TipSubtext>
+
+              <TipButtonGrid>
+                {[700, 1400, 2800].map((amount) => (
+                  <TipButton
+                    key={amount}
+                    selected={tipPreset === amount}
+                    onClick={() => {
+                      setTipPreset(amount)
+                      setTipCustom('')
+                    }}
+                  >
+                    {amount.toLocaleString()} kr
+                  </TipButton>
                 ))}
-              </PhotoGrid>
-            ) : (
-              <p style={{ fontFamily: 'Poppins', fontSize: 14, color: '#a3a4a7', fontStyle: 'italic' }}>
-                {t.noBagPhotos}
-              </p>
-            )}
+              </TipButtonGrid>
+
+              <label
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 12,
+                  color: '#4a6b60',
+                  display: 'block',
+                  marginBottom: 6,
+                }}
+              >
+                {t.tipCustomLabel}
+              </label>
+              <TipInput
+                type='number'
+                min='100'
+                placeholder='0'
+                value={tipCustom}
+                onChange={(e) => {
+                  setTipCustom(e.target.value)
+                  setTipPreset(null)
+                }}
+              />
+
+              <TipSubmit
+                onClick={submitTip}
+                disabled={tipSubmitting || effectiveTipAmount < 100}
+              >
+                {tipSubmitting
+                  ? t.tipProcessing
+                  : effectiveTipAmount > 0
+                    ? t.tipSubmit.replace(
+                        '{amount}',
+                        effectiveTipAmount.toLocaleString()
+                      )
+                    : t.tipSubmitGeneric}
+              </TipSubmit>
+            </TipCard>
           </Section>
         )}
       </PageContainer>

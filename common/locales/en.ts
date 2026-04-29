@@ -210,6 +210,8 @@ const orderTrackingPage = {
   deliveryWindow: 'Delivery Window',
   customer: 'Customer',
   phone: 'Phone',
+  address: 'Address',
+  addressLabel: 'Pickup address',
   standardSuffix: 'standard',
   oddSizeSuffix: 'odd-size',
   totalSuffix: 'total',
@@ -223,6 +225,7 @@ const orderTrackingPage = {
 
   // Edit section
   editOrder: 'Edit order',
+  editOrderDescription: 'Change your pickup time, address, or bag count.',
   updateYourOrder: 'Update your order',
   standardBags: 'Standard bags',
   oddSizeBags: 'Odd-size bags',
@@ -248,6 +251,40 @@ const orderTrackingPage = {
   paymentSuccess:
     'Payment successful! Your order has been updated and you will receive an updated confirmation.',
   paymentError: 'Payment failed. Please try again or contact BagBee for assistance.',
+
+  // Fast-Track
+  fastTrackTitle: 'Fast-Track to your flight',
+  fastTrackDescription:
+    'Skip the queue at airport security. 2,490 kr per passenger.',
+  fastTrackOpenButton: 'Order Fast-Track',
+  fastTrackSectionTitle: 'Add Fast-Track',
+  fastTrackPassenger: 'Passenger',
+  fastTrackMainPassenger: 'Main passenger',
+  fastTrackFirstName: 'First name',
+  fastTrackLastName: 'Last name',
+  fastTrackAddPassenger: '+ Add another passenger',
+  fastTrackRemovePassenger: 'Remove',
+  fastTrackTotal: 'Total',
+  fastTrackPay: 'Pay {amount} kr',
+  fastTrackProcessing: 'Processing...',
+  fastTrackCancel: 'Cancel',
+  fastTrackSuccess:
+    'Fast-Track purchase complete! You will receive a confirmation email shortly.',
+  fastTrackError:
+    'Fast-Track payment failed. Please try again or contact BagBee.',
+  fastTrackMaxPassengers: 'Maximum 4 passengers per Fast-Track order.',
+
+  // Tip the driver (English-only feature, shown after Delivered)
+  tipTitle: 'Happy with your delivery?',
+  tipSubtext:
+    'If your BagBee driver did a great job, leave them a tip. 100% goes to the driver.',
+  tipPresetLabel: 'Quick amount',
+  tipCustomLabel: 'Or enter a custom amount (kr)',
+  tipSubmit: 'Tip {amount} kr',
+  tipSubmitGeneric: 'Pay tip',
+  tipProcessing: 'Processing...',
+  tipSuccess: 'Thank you! Your tip has been sent to the driver.',
+  tipError: 'Tip payment failed. Please try again.',
 }
 
 const en = {

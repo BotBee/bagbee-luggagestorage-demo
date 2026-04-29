@@ -1,0 +1,301 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2026-04-26 12:00:00",
+  "containerVersion": {
+    "path": "accounts/0000/containers/0000/versions/0",
+    "accountId": "0000",
+    "containerId": "0000",
+    "containerVersionId": "0",
+    "container": {
+      "path": "accounts/0000/containers/0000",
+      "accountId": "0000",
+      "containerId": "0000",
+      "name": "Bagbee web — GA4 ecommerce additions",
+      "publicId": "GTM-PJNDJ33",
+      "usageContext": ["WEB"],
+      "fingerprint": "1745625600000",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/0000/containers/0000/workspaces?apiLink=container",
+      "features": {
+        "supportUserPermissions": true,
+        "supportEnvironments": true,
+        "supportWorkspaces": true,
+        "supportGtagConfigs": true,
+        "supportBuiltInVariables": true,
+        "supportClients": true,
+        "supportFolders": true,
+        "supportTags": true,
+        "supportTemplates": true,
+        "supportTriggers": true,
+        "supportVariables": true,
+        "supportVersions": true,
+        "supportZones": true,
+        "supportTransformations": true
+      }
+    },
+    "tag": [
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "tagId": "100",
+        "name": "GA4 Event - begin_checkout",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "BOOLEAN", "key": "sendEcommerceData", "value": "true" },
+          { "type": "TEMPLATE", "key": "eventName", "value": "begin_checkout" },
+          { "type": "TEMPLATE", "key": "measurementId", "value": "G-BKGCE0TJ3X" },
+          { "type": "TEMPLATE", "key": "eventSettingsTable", "value": "" },
+          { "type": "TEMPLATE", "key": "getEcommerceDataFrom", "value": "dataLayer" }
+        ],
+        "fingerprint": "1745625600001",
+        "firingTriggerId": ["100"],
+        "tagFiringOption": "ONCE_PER_EVENT",
+        "monitoringMetadata": { "type": "MAP" },
+        "consentSettings": { "consentStatus": "NOT_SET" }
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "tagId": "101",
+        "name": "GA4 Event - add_shipping_info",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "BOOLEAN", "key": "sendEcommerceData", "value": "true" },
+          { "type": "TEMPLATE", "key": "eventName", "value": "add_shipping_info" },
+          { "type": "TEMPLATE", "key": "measurementId", "value": "G-BKGCE0TJ3X" },
+          { "type": "TEMPLATE", "key": "getEcommerceDataFrom", "value": "dataLayer" },
+          {
+            "type": "LIST",
+            "key": "eventParameters",
+            "list": [
+              {
+                "type": "MAP",
+                "map": [
+                  { "type": "TEMPLATE", "key": "name", "value": "shipping_tier" },
+                  { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecom.shipping_tier}}" }
+                ]
+              }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600002",
+        "firingTriggerId": ["101"],
+        "tagFiringOption": "ONCE_PER_EVENT",
+        "monitoringMetadata": { "type": "MAP" },
+        "consentSettings": { "consentStatus": "NOT_SET" }
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "tagId": "102",
+        "name": "GA4 Event - add_payment_info",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "BOOLEAN", "key": "sendEcommerceData", "value": "true" },
+          { "type": "TEMPLATE", "key": "eventName", "value": "add_payment_info" },
+          { "type": "TEMPLATE", "key": "measurementId", "value": "G-BKGCE0TJ3X" },
+          { "type": "TEMPLATE", "key": "getEcommerceDataFrom", "value": "dataLayer" },
+          {
+            "type": "LIST",
+            "key": "eventParameters",
+            "list": [
+              {
+                "type": "MAP",
+                "map": [
+                  { "type": "TEMPLATE", "key": "name", "value": "payment_type" },
+                  { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecom.payment_type}}" }
+                ]
+              }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600003",
+        "firingTriggerId": ["102"],
+        "tagFiringOption": "ONCE_PER_EVENT",
+        "monitoringMetadata": { "type": "MAP" },
+        "consentSettings": { "consentStatus": "NOT_SET" }
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "tagId": "103",
+        "name": "GA4 Event - purchase",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "BOOLEAN", "key": "sendEcommerceData", "value": "true" },
+          { "type": "TEMPLATE", "key": "eventName", "value": "purchase" },
+          { "type": "TEMPLATE", "key": "measurementId", "value": "G-BKGCE0TJ3X" },
+          { "type": "TEMPLATE", "key": "getEcommerceDataFrom", "value": "dataLayer" }
+        ],
+        "fingerprint": "1745625600004",
+        "firingTriggerId": ["103"],
+        "tagFiringOption": "ONCE_PER_EVENT",
+        "monitoringMetadata": { "type": "MAP" },
+        "consentSettings": { "consentStatus": "NOT_SET" }
+      }
+    ],
+    "trigger": [
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "triggerId": "100",
+        "name": "CE - begin_checkout",
+        "type": "CUSTOM_EVENT",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{_event}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "begin_checkout" }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600100"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "triggerId": "101",
+        "name": "CE - add_shipping_info",
+        "type": "CUSTOM_EVENT",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{_event}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "add_shipping_info" }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600101"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "triggerId": "102",
+        "name": "CE - add_payment_info",
+        "type": "CUSTOM_EVENT",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{_event}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "add_payment_info" }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600102"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "triggerId": "103",
+        "name": "CE - purchase",
+        "type": "CUSTOM_EVENT",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{_event}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "purchase" }
+            ]
+          }
+        ],
+        "fingerprint": "1745625600103"
+      }
+    ],
+    "variable": [
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "200",
+        "name": "DLV - ecom.currency",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.currency" }
+        ],
+        "fingerprint": "1745625600200"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "201",
+        "name": "DLV - ecom.value",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.value" }
+        ],
+        "fingerprint": "1745625600201"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "202",
+        "name": "DLV - ecom.transaction_id",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.transaction_id" }
+        ],
+        "fingerprint": "1745625600202"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "203",
+        "name": "DLV - ecom.coupon",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.coupon" }
+        ],
+        "fingerprint": "1745625600203"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "204",
+        "name": "DLV - ecom.items",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.items" }
+        ],
+        "fingerprint": "1745625600204"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "205",
+        "name": "DLV - ecom.shipping_tier",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.shipping_tier" }
+        ],
+        "fingerprint": "1745625600205"
+      },
+      {
+        "accountId": "0000",
+        "containerId": "0000",
+        "variableId": "206",
+        "name": "DLV - ecom.payment_type",
+        "type": "v",
+        "parameter": [
+          { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+          { "type": "BOOLEAN", "key": "setDefaultValue", "value": "false" },
+          { "type": "TEMPLATE", "key": "name", "value": "ecommerce.payment_type" }
+        ],
+        "fingerprint": "1745625600206"
+      }
+    ],
+    "fingerprint": "1745625600999"
+  }
+}

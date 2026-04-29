@@ -213,6 +213,8 @@ const orderTrackingPage = {
   deliveryWindow: 'Afhendingartími',
   customer: 'Viðskiptavinur',
   phone: 'Sími',
+  address: 'Heimilisfang',
+  addressLabel: 'Sóknarstaður',
   standardSuffix: 'venjulegar',
   oddSizeSuffix: 'yfirstærð',
   totalSuffix: 'samtals',
@@ -226,6 +228,7 @@ const orderTrackingPage = {
 
   // Edit section
   editOrder: 'Breyta pöntun',
+  editOrderDescription: 'Breyttu sóknartíma, heimilisfangi eða fjölda taska.',
   updateYourOrder: 'Uppfæra pöntun',
   standardBags: 'Venjulegar töskur',
   oddSizeBags: 'Töskur í yfirstærð',
@@ -251,6 +254,39 @@ const orderTrackingPage = {
   paymentSuccess:
     'Greiðsla tókst! Pöntunin þín hefur verið uppfærð og þú færð uppfærða staðfestingu.',
   paymentError: 'Greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+
+  // Fast-Track
+  fastTrackTitle: 'Fast-Track á flugið þitt',
+  fastTrackDescription:
+    'Slepptu biðröðinni við öryggisleit. 2.490 kr á farþega.',
+  fastTrackOpenButton: 'Panta Fast-Track',
+  fastTrackSectionTitle: 'Bæta við Fast-Track',
+  fastTrackPassenger: 'Farþegi',
+  fastTrackMainPassenger: 'Aðalfarþegi',
+  fastTrackFirstName: 'Fornafn',
+  fastTrackLastName: 'Eftirnafn',
+  fastTrackAddPassenger: '+ Bæta við farþega',
+  fastTrackRemovePassenger: 'Fjarlægja',
+  fastTrackTotal: 'Samtals',
+  fastTrackPay: 'Greiða {amount} kr',
+  fastTrackProcessing: 'Vinnur...',
+  fastTrackCancel: 'Hætta við',
+  fastTrackSuccess:
+    'Fast-Track kaupin tókust! Þú munt fá staðfestingarpóst fljótlega.',
+  fastTrackError:
+    'Fast-Track greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+  fastTrackMaxPassengers: 'Hámark 4 farþegar á hverja Fast-Track pöntun.',
+
+  // Tip (English-only feature, but keys mirrored here so TS type is consistent)
+  tipTitle: '',
+  tipSubtext: '',
+  tipPresetLabel: '',
+  tipCustomLabel: '',
+  tipSubmit: '',
+  tipSubmitGeneric: '',
+  tipProcessing: '',
+  tipSuccess: '',
+  tipError: '',
 }
 
 const is = {
