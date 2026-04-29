@@ -35,11 +35,20 @@ const Calendar = ({ onChange, minDate, disabledDates }: ICalendarProps) => {
   // Get the current date and time
   const oneYearFromNow = new Date(new Date().setFullYear(new Date().getFullYear() + 1))
 
+  // Open the calendar on the month that actually has bookable dates.
+  // Without this, DayPicker defaults to today's month — so after the 15:00
+  // cut-off (when minDate jumps to "day after tomorrow"), customers land on
+  // a month with every day disabled. Prefer the persisted selection if it
+  // exists so returning customers don't get pulled back to a different
+  // month than the date they previously picked.
+  const defaultMonth = selectedDate || minDate || undefined
+
   return (
     <Container>
       <DayPicker
         mode="single"
         selected={selectedDate}
+        defaultMonth={defaultMonth}
         onSelect={onChange}
         disabled={[{ before: minDate, after: oneYearFromNow }, ...(disabledDates || [])]}
       />
