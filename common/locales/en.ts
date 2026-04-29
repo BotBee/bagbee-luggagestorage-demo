@@ -274,6 +274,27 @@ const orderTrackingPage = {
     'Fast-Track payment failed. Please try again or contact BagBee.',
   fastTrackMaxPassengers: 'Maximum 4 passengers per Fast-Track order.',
 
+  // Cancel order
+  cancelOrder: {
+    linkText: 'Cancel order',
+    confirmTitle: 'Cancel this order?',
+    confirmBody: (amount: string) =>
+      `You'll receive a full refund of ${amount} ISK to your original payment method. This can take a few minutes to appear. This action cannot be undone.`,
+    confirmButton: 'Yes, cancel and refund',
+    keepButton: 'Keep order',
+    cancelling: 'Cancelling…',
+    doneTitle: 'Order cancelled',
+    successRefunded:
+      'Your order has been cancelled and the full amount has been refunded. It may take a few business days to appear on your statement.',
+    successPartial:
+      'Your order has been cancelled, but one or more refunds could not be processed automatically. BagBee will contact you to complete the refund.',
+    successNoPayments:
+      'Your order has been cancelled. No payment was on file, so no refund is needed.',
+    error:
+      'We could not cancel the order. Please try again or contact BagBee directly.',
+    close: 'Close',
+  },
+
   // Tip the driver (English-only feature, shown after Delivered)
   tipTitle: 'Happy with your delivery?',
   tipSubtext:

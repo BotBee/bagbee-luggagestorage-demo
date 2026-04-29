@@ -277,6 +277,27 @@ const orderTrackingPage = {
     'Fast-Track greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
   fastTrackMaxPassengers: 'Hámark 4 farþegar á hverja Fast-Track pöntun.',
 
+  // Cancel order
+  cancelOrder: {
+    linkText: 'Hætta við pöntun',
+    confirmTitle: 'Hætta við þessa pöntun?',
+    confirmBody: (amount: string) =>
+      `Þú færð fulla endurgreiðslu upp á ${amount} kr. á sömu greiðslukort. Það getur tekið nokkrar mínútur að birtast. Ekki er hægt að afturkalla þessa aðgerð.`,
+    confirmButton: 'Já, hætta við og endurgreiða',
+    keepButton: 'Halda pöntun',
+    cancelling: 'Hætti við…',
+    doneTitle: 'Pöntun hætt við',
+    successRefunded:
+      'Pöntuninni þinni hefur verið hætt við og upphæðin endurgreidd að fullu. Það gæti tekið nokkra virka daga að birtast á yfirlitinu þínu.',
+    successPartial:
+      'Pöntuninni var hætt við, en ekki tókst að endurgreiða að fullu sjálfkrafa. BagBee hefur samband til að ljúka endurgreiðslu.',
+    successNoPayments:
+      'Pöntuninni hefur verið hætt við. Engin greiðsla var skráð, svo engin endurgreiðsla þarf að fara fram.',
+    error:
+      'Ekki tókst að hætta við pöntun. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+    close: 'Loka',
+  },
+
   // Tip (English-only feature, but keys mirrored here so TS type is consistent)
   tipTitle: '',
   tipSubtext: '',

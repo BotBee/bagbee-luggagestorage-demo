@@ -331,12 +331,148 @@ const TimeWindowLabel = styled.p`
   margin-bottom: 4px;
 `
 
-// Action cards grid (Edit order + Fast-Track side-by-side when both present)
+// Action cards grid (Fast-Track card, full-width)
 const ActionGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
   margin-bottom: 32px;
+`
+
+// Header row inside StatusCard (badge + compact edit button)
+const StatusCardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+`
+
+const EditOrderLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #d0d0d8;
+  border-radius: 20px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #000929;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #f5f5f7;
+    border-color: #000929;
+  }
+`
+
+// Subdued text-link style for cancellation — intentionally NOT a button to
+// avoid competing with primary actions (Edit, Fast-Track). Customers who
+// want to cancel will find it; casual browsers won't misclick.
+const CancelOrderRow = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #efeff3;
+`
+
+const CancelOrderLink = styled.button`
+  background: transparent;
+  border: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #8a8a94;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px 8px;
+  &:hover {
+    color: #c2313b;
+  }
+`
+
+// Cancellation confirmation modal
+const ModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+`
+
+const ModalCard = styled.div`
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+`
+
+const ModalTitle = styled.h3`
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #000929;
+`
+
+const ModalBody = styled.p`
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #454555;
+  margin: 0 0 20px 0;
+`
+
+const ModalButtonRow = styled.div`
+  display: flex;
+  gap: 12px;
+  flex-direction: column;
+  @media (min-width: 480px) {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+`
+
+const ModalPrimaryButton = styled.button<{ destructive?: boolean }>`
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 0;
+  background: ${({ destructive }) => (destructive ? '#c2313b' : '#000929')};
+  color: white;
+  transition: opacity 0.15s;
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const ModalSecondaryButton = styled.button`
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #000929;
+  border: 1px solid #d0d0d8;
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `
 
 const ActionCard = styled.div<{ variant?: 'primary' | 'secondary' }>`
@@ -598,6 +734,13 @@ const OrderPage = ({
   const tipPaid = router.query.tip_paid === 'true'
   const tipError = router.query.tip_error === 'true'
 
+  // Cancel-order state
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelResult, setCancelResult] = useState<
+    null | { success: boolean; message: string }
+  >(null)
+
   // Edit state
   const [editBags, setEditBags] = useState<number>(0)
   const [editOddSize, setEditOddSize] = useState<number>(0)
@@ -662,11 +805,18 @@ const OrderPage = ({
 
   const fields = order.fields
   const rawStatus = fields['Order Status'] || fields['Status'] || 'Pending'
-  // Normalize "In progress" → "In Progress" to match our type
-  const status = (
+  const normalizedStatus =
     String(rawStatus).toLowerCase() === 'in progress'
       ? 'In Progress'
       : rawStatus
+  // When user just paid (?paid=true in URL), the Rapyd webhook may not have
+  // reached Airtable yet. Show Confirmed optimistically if status is still
+  // Pending — the webhook will persist it moments later.
+  const status = (
+    paymentSuccess &&
+    (normalizedStatus === 'Pending' || !normalizedStatus)
+      ? 'Confirmed'
+      : normalizedStatus
   ) as OrderStatus
   const statusIndex = ALL_STATUSES.indexOf(status)
   const statusColor = STATUS_COLORS[status] || '#A3A4A7'
@@ -838,6 +988,44 @@ const OrderPage = ({
     (p) => p.firstName.trim() && p.lastName.trim()
   )
 
+  const submitCancel = async () => {
+    setCancelling(true)
+    setCancelResult(null)
+    try {
+      const response = await fetch('/api/order/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNo }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setCancelResult({
+          success: true,
+          message:
+            data.paymentCount === 0
+              ? t.cancelOrder.successNoPayments
+              : data.refundStatus === 'Refunded'
+                ? t.cancelOrder.successRefunded
+                : t.cancelOrder.successPartial,
+        })
+        // Give the user a moment to read the result, then reload so the UI
+        // reflects the new Cancelled status from Airtable.
+        setTimeout(() => {
+          window.location.reload()
+        }, 2500)
+      } else {
+        setCancelResult({
+          success: false,
+          message: data.message || t.cancelOrder.error,
+        })
+      }
+    } catch {
+      setCancelResult({ success: false, message: t.cancelOrder.error })
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   const submitFastTrack = async () => {
     if (!ftCanSubmit) return
     setFtSubmitting(true)
@@ -976,9 +1164,16 @@ const OrderPage = ({
         <Section>
           <SectionTitle>{t.orderDetailsTitle}</SectionTitle>
           <StatusCard>
-            <StatusBadge bgColor={statusColor}>
-              {t.status[status as OrderStatus] || status}
-            </StatusBadge>
+            <StatusCardHeader>
+              <StatusBadge bgColor={statusColor}>
+                {t.status[status as OrderStatus] || status}
+              </StatusBadge>
+              {isConfirmed && !isEditing && !editSubmitted && (
+                <EditOrderLink onClick={startEditing}>
+                  <span>&#9998;</span> {t.editOrder}
+                </EditOrderLink>
+              )}
+            </StatusCardHeader>
             <DetailGrid>
               <DetailRow>
                 <DetailLabel>{t.service}</DetailLabel>
@@ -1031,22 +1226,30 @@ const OrderPage = ({
               )}
             </DetailGrid>
 
+            {/* Cancel order — subdued link; only shown when cancellation is
+                still actionable (not In progress / Delivered / Cancelled). */}
+            {!isEditing &&
+              !editSubmitted &&
+              !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                status as string,
+              ) && (
+                <CancelOrderRow>
+                  <CancelOrderLink
+                    onClick={() => {
+                      setCancelResult(null)
+                      setShowCancelModal(true)
+                    }}
+                  >
+                    {t.cancelOrder.linkText}
+                  </CancelOrderLink>
+                </CancelOrderRow>
+              )}
           </StatusCard>
         </Section>
 
-        {/* Quick action cards — Edit order (when Confirmed) + Fast-Track (always) */}
+        {/* Fast-Track promo card (Edit button moved into StatusCard header) */}
         {!isEditing && !showFastTrack && !editSubmitted && (
           <ActionGrid>
-            {isConfirmed && (
-              <ActionCard variant='secondary'>
-                <ActionIcon variant='secondary'>&#9998;</ActionIcon>
-                <ActionTitle>{t.editOrder}</ActionTitle>
-                <ActionDescription>{t.editOrderDescription}</ActionDescription>
-                <ActionButton variant='secondary' onClick={startEditing}>
-                  {t.editOrder}
-                </ActionButton>
-              </ActionCard>
-            )}
             <ActionCard variant='primary'>
               <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
               <ActionTitle>{t.fastTrackTitle}</ActionTitle>
@@ -1357,6 +1560,12 @@ const OrderPage = ({
                         updateFtPassenger(i, 'firstName', e.target.value)
                       }
                       style={{
+                        // width: 100% + minWidth: 0 together let the input
+                        // shrink below its default intrinsic `size=20` width,
+                        // so on narrow phones the two-column grid stays within
+                        // the card instead of overflowing.
+                        width: '100%',
+                        minWidth: 0,
                         padding: '12px 16px',
                         fontSize: 14,
                         fontFamily: 'Poppins, sans-serif',
@@ -1374,6 +1583,8 @@ const OrderPage = ({
                         updateFtPassenger(i, 'lastName', e.target.value)
                       }
                       style={{
+                        width: '100%',
+                        minWidth: 0,
                         padding: '12px 16px',
                         fontSize: 14,
                         fontFamily: 'Poppins, sans-serif',
@@ -1556,6 +1767,58 @@ const OrderPage = ({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={lightboxPhoto} alt='Bag photo' />
         </LightboxOverlay>
+      )}
+
+      {showCancelModal && (
+        <ModalOverlay
+          onClick={(e) => {
+            // click-outside-to-close, but not while a request is in flight
+            if (e.target === e.currentTarget && !cancelling) {
+              setShowCancelModal(false)
+            }
+          }}
+        >
+          <ModalCard>
+            <ModalTitle>
+              {cancelResult?.success
+                ? t.cancelOrder.doneTitle
+                : t.cancelOrder.confirmTitle}
+            </ModalTitle>
+            <ModalBody>
+              {cancelResult
+                ? cancelResult.message
+                : t.cancelOrder.confirmBody(
+                    Number(fields['Upphæð'] || 0).toLocaleString('is-IS'),
+                  )}
+            </ModalBody>
+            {!cancelResult && (
+              <ModalButtonRow>
+                <ModalSecondaryButton
+                  disabled={cancelling}
+                  onClick={() => setShowCancelModal(false)}
+                >
+                  {t.cancelOrder.keepButton}
+                </ModalSecondaryButton>
+                <ModalPrimaryButton
+                  destructive
+                  disabled={cancelling}
+                  onClick={submitCancel}
+                >
+                  {cancelling
+                    ? t.cancelOrder.cancelling
+                    : t.cancelOrder.confirmButton}
+                </ModalPrimaryButton>
+              </ModalButtonRow>
+            )}
+            {cancelResult && !cancelResult.success && (
+              <ModalButtonRow>
+                <ModalSecondaryButton onClick={() => setShowCancelModal(false)}>
+                  {t.cancelOrder.close}
+                </ModalSecondaryButton>
+              </ModalButtonRow>
+            )}
+          </ModalCard>
+        </ModalOverlay>
       )}
     </>
   )
