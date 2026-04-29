@@ -2,7 +2,7 @@ import styled from '@emotion/styled'
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { NextSeo } from 'next-seo'
 import Header from '../../components/header/Header'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import {
   usePlacesWidget,
@@ -13,6 +13,22 @@ import { getMorningConstraints, getSliderConstraints } from '../../common/postal
 import en from '../../common/locales/en'
 import is from '../../common/locales/is'
 import { useBookingStore } from '../../store/store'
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
+
+// Format a phone number for display.
+// Defaults to Iceland (+354) when the number has no country code (most BagBee
+// customers are local). Returns the international format ("+354 698 3808",
+// "+1 415 555 2671") when parseable; falls back to the raw string otherwise.
+const formatPhoneForDisplay = (raw: string | undefined | null): string => {
+  if (!raw) return ''
+  try {
+    const parsed = parsePhoneNumberFromString(String(raw), 'IS')
+    if (!parsed) return String(raw)
+    return parsed.formatInternational()
+  } catch {
+    return String(raw)
+  }
+}
 
 // --- Status types ---
 type OrderStatus = 'Pending' | 'Confirmed' | 'Planned' | 'In Progress' | 'Delivered'
@@ -717,7 +733,11 @@ const OrderPage = ({
     }
   }, [paymentSuccess])
 
-  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
+  // Lightbox tracks the index of the open photo so users can swipe / arrow
+  // through the gallery. null = closed.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const lightboxTouchStartX = useRef<number | null>(null)
+  const lightboxTouchStartY = useRef<number | null>(null)
 
   // Fast-Track state
   const [showFastTrack, setShowFastTrack] = useState(false)
@@ -843,9 +863,12 @@ const OrderPage = ({
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   const encodedAddress = encodeURIComponent(displayMapAddress || 'Keflavik Airport, Iceland')
-  const mapsEmbedUrl = `https://www.google.com/maps/embed/v1/place?key=${mapsApiKey}&q=${encodedAddress}`
-
-  const totalBags = (fields['Töskufjöldi_no'] || 0) + (fields['Töskufjöldi_no_yfirstærð'] || 0)
+  // KEF terminal — Google's geocoded pin for "Flugstöð" lands slightly off; this
+  // is the actual baggage-arrivals door we want the customer to see.
+  const isFlugstodAddress = /flugst[öo]ð/i.test(displayMapAddress || '')
+  const mapsEmbedUrl = isFlugstodAddress
+    ? `https://www.google.com/maps/embed/v1/place?key=${mapsApiKey}&q=63.9961944%2C-22.6244167`
+    : `https://www.google.com/maps/embed/v1/place?key=${mapsApiKey}&q=${encodedAddress}`
 
   const originalBags = fields['Töskufjöldi_no'] || 0
   const originalOddSize = fields['Töskufjöldi_no_yfirstærð'] || 0
@@ -1139,7 +1162,10 @@ const OrderPage = ({
         <Section>
           <ProgressContainer>
             {ALL_STATUSES.map((s, i) => {
-              const completed = i < statusIndex
+              // When the order is Delivered (final state), the Afhent circle
+              // also shows a checkmark \u2014 the journey is finished.
+              const isFinalDelivered = status === 'Delivered'
+              const completed = isFinalDelivered ? i <= statusIndex : i < statusIndex
               const active = i === statusIndex
               return (
                 <ProgressStep key={s} active={active} completed={completed}>
@@ -1176,33 +1202,26 @@ const OrderPage = ({
             </StatusCardHeader>
             <DetailGrid>
               <DetailRow>
-                <DetailLabel>{t.service}</DetailLabel>
-                <DetailValue>{serviceType}</DetailValue>
+                <DetailLabel>{t.customer}</DetailLabel>
+                <DetailValue>{fields['Nafn viðskiptavinar'] || 'N/A'}</DetailValue>
               </DetailRow>
+              {fields['Short Address'] && (
+                <DetailRow>
+                  <DetailLabel>{t.address}</DetailLabel>
+                  <DetailValue>{fields['Short Address']}</DetailValue>
+                </DetailRow>
+              )}
               <DetailRow>
-                <DetailLabel>{t.flight}</DetailLabel>
-                <DetailValue>{fields['Flugnúmer'] || 'N/A'}</DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.flightDate}</DetailLabel>
-                <DetailValue>{formatDate(fields['Dagsetning flugs'])}</DetailValue>
+                <DetailLabel>{t.phone}</DetailLabel>
+                <DetailValue>
+                  {fields['Símanúmer']
+                    ? formatPhoneForDisplay(fields['Símanúmer'])
+                    : 'N/A'}
+                </DetailValue>
               </DetailRow>
               <DetailRow>
                 <DetailLabel>{t.pickupDate}</DetailLabel>
                 <DetailValue>{formatDate(fields['Dagsetning pick-up'])}</DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.airline}</DetailLabel>
-                <DetailValue>{fields['Flugfélag'] || 'N/A'}</DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.bags}</DetailLabel>
-                <DetailValue>
-                  {fields['Töskufjöldi_no'] || 0} {t.standardSuffix}
-                  {fields['Töskufjöldi_no_yfirstærð'] > 0 &&
-                    ` + ${fields['Töskufjöldi_no_yfirstærð']} ${t.oddSizeSuffix}`}
-                  {` (${totalBags} ${t.totalSuffix})`}
-                </DetailValue>
               </DetailRow>
               {fields['Tímasetning'] && (
                 <DetailRow>
@@ -1211,19 +1230,25 @@ const OrderPage = ({
                 </DetailRow>
               )}
               <DetailRow>
-                <DetailLabel>{t.customer}</DetailLabel>
-                <DetailValue>{fields['Nafn viðskiptavinar'] || 'N/A'}</DetailValue>
+                <DetailLabel>{t.bags}</DetailLabel>
+                <DetailValue>
+                  {fields['Töskufjöldi_no'] || 0} {t.standardSuffix}
+                  {fields['Töskufjöldi_no_yfirstærð'] > 0 &&
+                    ` + ${fields['Töskufjöldi_no_yfirstærð']} ${t.oddSizeSuffix}`}
+                </DetailValue>
               </DetailRow>
               <DetailRow>
-                <DetailLabel>{t.phone}</DetailLabel>
-                <DetailValue>{fields['Símanúmer'] || 'N/A'}</DetailValue>
+                <DetailLabel>{t.flightDate}</DetailLabel>
+                <DetailValue>{formatDate(fields['Dagsetning flugs'])}</DetailValue>
               </DetailRow>
-              {fields['Short Address'] && (
-                <DetailRow>
-                  <DetailLabel>{t.address}</DetailLabel>
-                  <DetailValue>{fields['Short Address']}</DetailValue>
-                </DetailRow>
-              )}
+              <DetailRow>
+                <DetailLabel>{t.airline}</DetailLabel>
+                <DetailValue>{fields['Flugfélag'] || 'N/A'}</DetailValue>
+              </DetailRow>
+              <DetailRow>
+                <DetailLabel>{t.flight}</DetailLabel>
+                <DetailValue>{fields['Flugnúmer'] || 'N/A'}</DetailValue>
+              </DetailRow>
             </DetailGrid>
 
             {/* Cancel order — subdued link; only shown when cancellation is
@@ -1247,8 +1272,9 @@ const OrderPage = ({
           </StatusCard>
         </Section>
 
-        {/* Fast-Track promo card (Edit button moved into StatusCard header) */}
-        {!isEditing && !showFastTrack && !editSubmitted && (
+        {/* Fast-Track — collapsed promo OR expanded form, in the same slot
+            so opening the form replaces the card in place (not below the bag photos) */}
+        {!isEditing && !editSubmitted && !showFastTrack && (
           <ActionGrid>
             <ActionCard variant='primary'>
               <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
@@ -1259,6 +1285,203 @@ const OrderPage = ({
               </ActionButton>
             </ActionCard>
           </ActionGrid>
+        )}
+        {!isEditing && !editSubmitted && showFastTrack && (
+          <Section>
+            <EditSection>
+              <EditTitle>{t.fastTrackSectionTitle}</EditTitle>
+
+              {ftPassengers.map((passenger, i) => (
+                <div
+                  key={i}
+                  style={{
+                    paddingBottom: 12,
+                    marginBottom: 12,
+                    borderBottom:
+                      i < ftPassengers.length - 1
+                        ? '1px solid #f0e0c0'
+                        : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <TimeWindowLabel style={{ margin: 0 }}>
+                      {i === 0
+                        ? t.fastTrackMainPassenger
+                        : `${t.fastTrackPassenger} ${i + 1}`}
+                    </TimeWindowLabel>
+                    {i > 0 && (
+                      <button
+                        onClick={() => removeFtPassenger(i)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#c33',
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {t.fastTrackRemovePassenger}
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 8,
+                    }}
+                  >
+                    <input
+                      type='text'
+                      placeholder={t.fastTrackFirstName}
+                      value={passenger.firstName}
+                      onChange={(e) =>
+                        updateFtPassenger(i, 'firstName', e.target.value)
+                      }
+                      style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '12px 16px',
+                        fontSize: 14,
+                        fontFamily: 'Poppins, sans-serif',
+                        border: '1px solid #e5e6eb',
+                        borderRadius: 12,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <input
+                      type='text'
+                      placeholder={t.fastTrackLastName}
+                      value={passenger.lastName}
+                      onChange={(e) =>
+                        updateFtPassenger(i, 'lastName', e.target.value)
+                      }
+                      style={{
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '12px 16px',
+                        fontSize: 14,
+                        fontFamily: 'Poppins, sans-serif',
+                        border: '1px solid #e5e6eb',
+                        borderRadius: 12,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {ftPassengers.length < 4 && (
+                <button
+                  onClick={addFtPassenger}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    background: 'transparent',
+                    border: '1px dashed #f3ad3c',
+                    borderRadius: 12,
+                    color: '#e37f2f',
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    marginBottom: 16,
+                  }}
+                >
+                  {t.fastTrackAddPassenger}
+                </button>
+              )}
+
+              <div
+                style={{
+                  background: '#fff8ee',
+                  border: '1px solid #f3ad3c',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginTop: 8,
+                  textAlign: 'center',
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: '#000929',
+                    margin: 0,
+                  }}
+                >
+                  {t.fastTrackTotal}:{' '}
+                  <strong>{ftTotal.toLocaleString()} kr</strong>
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: '#696f79',
+                    margin: '4px 0 0',
+                  }}
+                >
+                  {ftPassengers.length} × 2,490 kr
+                </p>
+              </div>
+
+              {ftError && (
+                <p
+                  style={{
+                    color: '#c33',
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    marginTop: 12,
+                    textAlign: 'center',
+                  }}
+                >
+                  {ftError}
+                </p>
+              )}
+
+              <SubmitButton
+                onClick={submitFastTrack}
+                disabled={ftSubmitting || !ftCanSubmit}
+              >
+                {ftSubmitting
+                  ? t.fastTrackProcessing
+                  : t.fastTrackPay.replace(
+                      '{amount}',
+                      ftTotal.toLocaleString()
+                    )}
+              </SubmitButton>
+
+              <button
+                onClick={closeFastTrack}
+                disabled={ftSubmitting}
+                style={{
+                  width: '100%',
+                  marginTop: 8,
+                  padding: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#696f79',
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                {t.fastTrackCancel}
+              </button>
+            </EditSection>
+          </Section>
         )}
 
         {/* Edit Mode */}
@@ -1473,7 +1696,7 @@ const OrderPage = ({
             <PhotoGrid>
               {photos.map((photo: Photo, i: number) => (
                 <div key={i}>
-                  <PhotoCard onClick={() => setLightboxPhoto(photo.url)}>
+                  <PhotoCard onClick={() => setLightboxIndex(i)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt={`Bag ${i + 1}`} />
                   </PhotoCard>
@@ -1494,209 +1717,6 @@ const OrderPage = ({
                 </div>
               ))}
             </PhotoGrid>
-          </Section>
-        )}
-
-        {/* Fast-Track expanded form (collapsed state lives in ActionGrid above) */}
-        {showFastTrack && (
-          <Section>
-            <EditSection>
-              <EditTitle>{t.fastTrackSectionTitle}</EditTitle>
-
-              {ftPassengers.map((passenger, i) => (
-                <div
-                  key={i}
-                  style={{
-                    paddingBottom: 12,
-                    marginBottom: 12,
-                    borderBottom:
-                      i < ftPassengers.length - 1
-                        ? '1px solid #f0e0c0'
-                        : 'none',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <TimeWindowLabel style={{ margin: 0 }}>
-                      {i === 0
-                        ? t.fastTrackMainPassenger
-                        : `${t.fastTrackPassenger} ${i + 1}`}
-                    </TimeWindowLabel>
-                    {i > 0 && (
-                      <button
-                        onClick={() => removeFtPassenger(i)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#c33',
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                        }}
-                      >
-                        {t.fastTrackRemovePassenger}
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 8,
-                    }}
-                  >
-                    <input
-                      type='text'
-                      placeholder={t.fastTrackFirstName}
-                      value={passenger.firstName}
-                      onChange={(e) =>
-                        updateFtPassenger(i, 'firstName', e.target.value)
-                      }
-                      style={{
-                        // width: 100% + minWidth: 0 together let the input
-                        // shrink below its default intrinsic `size=20` width,
-                        // so on narrow phones the two-column grid stays within
-                        // the card instead of overflowing.
-                        width: '100%',
-                        minWidth: 0,
-                        padding: '12px 16px',
-                        fontSize: 14,
-                        fontFamily: 'Poppins, sans-serif',
-                        border: '1px solid #e5e6eb',
-                        borderRadius: 12,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                    <input
-                      type='text'
-                      placeholder={t.fastTrackLastName}
-                      value={passenger.lastName}
-                      onChange={(e) =>
-                        updateFtPassenger(i, 'lastName', e.target.value)
-                      }
-                      style={{
-                        width: '100%',
-                        minWidth: 0,
-                        padding: '12px 16px',
-                        fontSize: 14,
-                        fontFamily: 'Poppins, sans-serif',
-                        border: '1px solid #e5e6eb',
-                        borderRadius: 12,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              {ftPassengers.length < 4 && (
-                <button
-                  onClick={addFtPassenger}
-                  style={{
-                    width: '100%',
-                    padding: 12,
-                    background: 'transparent',
-                    border: '1px dashed #f3ad3c',
-                    borderRadius: 12,
-                    color: '#e37f2f',
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    marginBottom: 16,
-                  }}
-                >
-                  {t.fastTrackAddPassenger}
-                </button>
-              )}
-
-              <div
-                style={{
-                  background: '#fff8ee',
-                  border: '1px solid #f3ad3c',
-                  borderRadius: 12,
-                  padding: 16,
-                  marginTop: 8,
-                  textAlign: 'center',
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    color: '#000929',
-                    margin: 0,
-                  }}
-                >
-                  {t.fastTrackTotal}:{' '}
-                  <strong>{ftTotal.toLocaleString()} kr</strong>
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: '#696f79',
-                    margin: '4px 0 0',
-                  }}
-                >
-                  {ftPassengers.length} × 2,490 kr
-                </p>
-              </div>
-
-              {ftError && (
-                <p
-                  style={{
-                    color: '#c33',
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    marginTop: 12,
-                    textAlign: 'center',
-                  }}
-                >
-                  {ftError}
-                </p>
-              )}
-
-              <SubmitButton
-                onClick={submitFastTrack}
-                disabled={ftSubmitting || !ftCanSubmit}
-              >
-                {ftSubmitting
-                  ? t.fastTrackProcessing
-                  : t.fastTrackPay.replace(
-                      '{amount}',
-                      ftTotal.toLocaleString()
-                    )}
-              </SubmitButton>
-
-              <button
-                onClick={closeFastTrack}
-                disabled={ftSubmitting}
-                style={{
-                  width: '100%',
-                  marginTop: 8,
-                  padding: 12,
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#696f79',
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                {t.fastTrackCancel}
-              </button>
-            </EditSection>
           </Section>
         )}
 
@@ -1762,10 +1782,169 @@ const OrderPage = ({
         )}
       </PageContainer>
 
-      {lightboxPhoto && (
-        <LightboxOverlay onClick={() => setLightboxPhoto(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightboxPhoto} alt='Bag photo' />
+      {lightboxIndex !== null && photos && photos[lightboxIndex] && (
+        <LightboxOverlay
+          onClick={(e) => {
+            // tapping the dim area closes; tapping the image / chrome doesn't
+            if (e.target === e.currentTarget) setLightboxIndex(null)
+          }}
+          onTouchStart={(e) => {
+            lightboxTouchStartX.current = e.touches[0].clientX
+            lightboxTouchStartY.current = e.touches[0].clientY
+          }}
+          onTouchEnd={(e) => {
+            const startX = lightboxTouchStartX.current
+            const startY = lightboxTouchStartY.current
+            lightboxTouchStartX.current = null
+            lightboxTouchStartY.current = null
+            if (startX === null || startY === null) return
+            const dx = e.changedTouches[0].clientX - startX
+            const dy = e.changedTouches[0].clientY - startY
+            // Only treat as swipe if the gesture is clearly horizontal
+            if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+            if (photos.length < 2) return
+            setLightboxIndex((idx) => {
+              if (idx === null) return idx
+              const next = dx < 0 ? idx + 1 : idx - 1
+              return (next + photos.length) % photos.length
+            })
+          }}
+        >
+          {/* Close (×) */}
+          <button
+            type='button'
+            aria-label='Close'
+            onClick={() => setLightboxIndex(null)}
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              background: 'rgba(0,0,0,0.5)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              fontSize: 22,
+              lineHeight: 1,
+              cursor: 'pointer',
+              zIndex: 1,
+            }}
+          >
+            ×
+          </button>
+
+          {/* Prev arrow — only visible when there are 2+ photos */}
+          {photos.length > 1 && (
+            <button
+              type='button'
+              aria-label='Previous photo'
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((idx) =>
+                  idx === null ? idx : (idx - 1 + photos.length) % photos.length
+                )
+              }}
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: 44,
+                height: 44,
+                fontSize: 22,
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              ‹
+            </button>
+          )}
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+              maxWidth: '90vw',
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[lightboxIndex].url}
+              alt={`Bag ${lightboxIndex + 1}`}
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '78vh',
+                borderRadius: 8,
+                objectFit: 'contain',
+              }}
+            />
+            {photos[lightboxIndex].tagNumber && (
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#fff',
+                  margin: 0,
+                  textAlign: 'center',
+                }}
+              >
+                {photos[lightboxIndex].tagNumber}
+                {photos.length > 1 && (
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 400,
+                      color: 'rgba(255,255,255,0.6)',
+                      marginTop: 2,
+                    }}
+                  >
+                    {lightboxIndex + 1} / {photos.length}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Next arrow */}
+          {photos.length > 1 && (
+            <button
+              type='button'
+              aria-label='Next photo'
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((idx) =>
+                  idx === null ? idx : (idx + 1) % photos.length
+                )
+              }}
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: 44,
+                height: 44,
+                fontSize: 22,
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              ›
+            </button>
+          )}
         </LightboxOverlay>
       )}
 

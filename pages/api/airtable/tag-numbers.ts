@@ -43,6 +43,9 @@ export default async function handler(
     ]
     const photos = items
       .map((record) => {
+        const tagNumber = (record.fields['BagTag Number'] ||
+          record.fields['Bag Tag Number'] ||
+          record.fields['Tag Number']) as string | undefined
         for (const fieldName of attachmentFieldNames) {
           const attachments = record.fields[fieldName] as
             | Array<{
@@ -57,6 +60,7 @@ export default async function handler(
               url: att.url,
               filename: att.filename,
               type: att.type,
+              tagNumber: tagNumber || undefined,
             }))
           }
         }
