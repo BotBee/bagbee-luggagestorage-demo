@@ -31,10 +31,15 @@ const Card = styled.a`
   box-shadow: 0px 17px 62px rgba(2, 6, 12, 0.07);
   text-decoration: none;
   color: inherit;
+  /* 10% smaller than the surrounding column — the card was visually
+     dominating the heading next to it. transform-origin: top centers it
+     horizontally and pulls it up so the section doesn't end with a gap. */
+  transform: scale(0.9);
+  transform-origin: top center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
-    transform: translateY(-2px);
+    transform: scale(0.9) translateY(-2px);
     box-shadow: 0px 22px 70px rgba(2, 6, 12, 0.1);
   }
 `
