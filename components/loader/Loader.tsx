@@ -41,6 +41,12 @@ const Loader = ({ text }: ILoaderProps) => {
           maxWidth: '500px',
         }}
         height={200}
+        // react-lottie 1.2.3 reads `eventListeners` in componentDidMount and
+        // calls .forEach on it. Its class-component `defaultProps` aren't
+        // reliably applied through React 18, so when the prop arrives
+        // undefined the Loader crashes the whole page with "Cannot read
+        // properties of undefined (reading 'forEach')". Pass [] explicitly.
+        eventListeners={[]}
       />
       <Text>{text}</Text>
     </Container>

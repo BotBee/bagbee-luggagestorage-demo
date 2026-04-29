@@ -38,7 +38,7 @@ const Success = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>)
       <Container>
         <>
           <Message
-            asset={<Lottie options={defaultOptions} width="70%" />}
+            asset={<Lottie options={defaultOptions} width="70%" eventListeners={[]} />}
             title={t.successStep.title}
             text={t.successStep.message}
             bookingNumber={recordId as string}
