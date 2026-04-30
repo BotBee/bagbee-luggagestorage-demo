@@ -93,12 +93,16 @@ export const mapToOrder = (
   locale: string,
   referrer: string,
 ): AirtableOrder => {
+  // NOTE: validateBookingForOrder is intentionally NOT thrown from here.
+  // Earlier we did `throw new Error(...)` if any field was missing — that
+  // turned out to flag legitimate bookings (e.g. a manual-flight-entry
+  // code path where selectedFlight is undefined while Flugnúmer is built
+  // from a different source) and broke the checkout for real customers.
+  // Server-side validation in /api/airtable/create remains the source of
+  // truth; the client-side validator is now an advisory log only.
   const problems = validateBookingForOrder(bookingState)
   if (problems.length > 0) {
-    // Fail loud — better to break the booking than to silently write
-    // today's date and a half-empty record (see comment on
-    // validateBookingForOrder for the incident this guards against).
-    throw new Error(`Cannot create order — ${problems.join('; ')}`)
+    console.warn('[mapToOrder] booking has incomplete fields', problems)
   }
 
   const is100PercentDiscount = bookingState.customerInfo.discountCode?.discount === 100

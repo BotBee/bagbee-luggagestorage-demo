@@ -110,8 +110,18 @@ const ConfirmOrder = () => {
     }
   }, [bookingState.customerInfo.discountCode])
 
-  const onSubmit = async (values: Customer) => {
-    updateCustomer(values)
+  // eslint-disable-next-line no-unused-vars
+  const onSubmit = async (_values: Customer) => {
+    // NOTE: do NOT call updateCustomer(_values) here. The form on
+    // confirm-order has no registered fields (the discount code is
+    // managed via setInputValue + fetchDiscountCode), so handleSubmit
+    // passes an empty values object. Calling updateCustomer({}) would
+    // overwrite the entire customerInfo (name, email, phone, kennitala,
+    // discountCode) with undefineds — which produced the partial-order
+    // class of bugs (Apr 29 incident) and caused the validator to flag
+    // every legitimate booking on Apr 30. customerInfo is already in
+    // the store from /book/personal-info; there is nothing to update
+    // here.
 
     const discount = bookingState.customerInfo.discountCode?.discount ?? 0
     const finalValue = discountPrice(bookingState.checkoutPrice.amount, discount)
@@ -129,23 +139,19 @@ const ConfirmOrder = () => {
       // Read fresh state from the store. The hook-provided `bookingState` is
       // a render-time snapshot — it doesn't see the customer values we just
       // wrote with updateCustomer(values), and would silently drop them
-      // (the Apr 2026 partial-order incident).
+      // (the Apr 2026 partial-order incident). Keep this read; only the
+      // pre-flight blocker below was rolled back after it flagged
+      // legitimate bookings on 2026-04-30.
       const freshBooking = useBookingStore.getState().booking
 
-      // Pre-flight validation. If anything required is missing or any date
-      // is invalid, bail before we try to create the order. This catches
-      // partially-rehydrated stores and direct-URL deep-links that skip the
-      // earlier wizard steps. Server-side validation in /api/airtable/create
-      // is the second line of defence.
+      // Pre-flight validation removed — the strict client-side guard rejected
+      // legitimate bookings (e.g. paths where selectedFlight is undefined
+      // while the underlying flight info is fine). Log any problems for
+      // debugging but never block. Server-side validation in
+      // /api/airtable/create remains as the safety net.
       const problems = validateBookingForOrder(freshBooking)
       if (problems.length > 0) {
-        console.warn('[confirm-order] booking incomplete, blocking submit', problems)
-        toast.error(
-          locale === 'en'
-            ? 'Some booking details are missing — please go back and complete the previous steps.'
-            : 'Það vantar upplýsingar í pöntunina — vinsamlegast farðu til baka og kláraðu fyrri skrefin.',
-        )
-        return
+        console.warn('[confirm-order] booking has incomplete fields (advisory only)', problems)
       }
 
       // Create order in Airtable with payment status incomplete

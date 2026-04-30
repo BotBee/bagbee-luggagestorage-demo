@@ -19,43 +19,17 @@ const extractIcelandicPostcode = (address: string | undefined | null): string | 
   return match ? match[1] : null
 }
 
-// Server-side validation of the order payload. Last line of defence against
-// client-side state-shape bugs — if any of these guards trip, the bug is
-// upstream (Zustand snapshot staleness, partial store reset, etc.) but we
-// don't want a half-blank record landing in Airtable and being routed for
-// pickup. Required fields + sanity-check dates are not earlier than today
-// (Iceland time). See incident note in common/mapper.ts validateBookingForOrder.
+// Narrow server-side guard. The strict required-field checks were rolled back
+// on 2026-04-30 after they flagged legitimate bookings (root cause still under
+// investigation — most likely a code path where the Airtable payload is built
+// from booking-state shapes the validator didn't anticipate). What's kept:
+// the date-sanity check, which is the single most important safeguard against
+// the Apr 29 partial-order incident — that order ended up with `Dagsetning
+// flugs = today` because dayjs(undefined)/`new Date()` silently fell back to
+// today's date. Past-date is the only deterministic signal of that class of
+// bug, and rejecting on it doesn't false-positive on real bookings.
 const validateOrderPayload = (item: AirtableOrder): string[] => {
   const problems: string[] = []
-  const isNonEmptyString = (v: unknown): v is string =>
-    typeof v === 'string' && v.trim() !== ''
-
-  if (!isNonEmptyString(item?.['Nafn viðskiptavinar'])) {
-    problems.push('customer name is required')
-  }
-  if (!isNonEmptyString(item?.Tölvupóstfang)) {
-    problems.push('customer email is required')
-  }
-  if (!isNonEmptyString(item?.Símanúmer)) {
-    problems.push('customer phone number is required')
-  }
-  if (!isNonEmptyString(item?.Heimilisfang)) {
-    problems.push('pickup address is required')
-  }
-  if (!isNonEmptyString(item?.Tímasetning)) {
-    problems.push('pickup time window is required')
-  }
-  if (!isNonEmptyString(item?.Flugnúmer)) {
-    problems.push('flight number is required')
-  }
-  if (!isNonEmptyString(item?.Flugfélag)) {
-    problems.push('airline is required')
-  }
-
-  // Date sanity. Reject anything missing, unparseable, or older than today
-  // in Iceland (UTC). Date strings come in as 'YYYY/MM/DD' from mapToOrder.
-  // The only way today could be valid is via an admin/manual workflow we
-  // don't have — every customer-created order is for tomorrow or later.
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
   const parseYmd = (s: unknown): Date | null => {
@@ -67,15 +41,12 @@ const validateOrderPayload = (item: AirtableOrder): string[] => {
   }
   const flightDate = parseYmd(item?.['Dagsetning flugs'] as unknown)
   const pickupDate = parseYmd(item?.['Dagsetning pick-up'] as unknown)
-  if (!flightDate) problems.push('flight date is missing or invalid')
-  else if (flightDate.getTime() < today.getTime()) {
+  if (flightDate && flightDate.getTime() < today.getTime()) {
     problems.push('flight date is in the past')
   }
-  if (!pickupDate) problems.push('pickup date is missing or invalid')
-  else if (pickupDate.getTime() < today.getTime()) {
+  if (pickupDate && pickupDate.getTime() < today.getTime()) {
     problems.push('pickup date is in the past')
   }
-
   return problems
 }
 
