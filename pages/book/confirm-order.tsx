@@ -1,8 +1,8 @@
 import styled from '@emotion/styled'
-import { Error } from 'airtable'
+import { Error as AirtableError } from 'airtable'
 import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
-import { useContext, useEffect, useState } from 'react'
+import { useContext } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import toast, { Toaster } from 'react-hot-toast'
 import en from '../../common/locales/en'
@@ -10,12 +10,12 @@ import is from '../../common/locales/is'
 import { mapToOrder, validateBookingForOrder } from '../../common/mapper'
 import { Customer } from '../../common/types'
 import Button from '../../components/button/Button'
+import DiscountCodeInput from '../../components/discount-code-input/DiscountCodeInput'
 import FormLayout from '../../components/form/FormLayout'
-import TextInput from '../../components/form/text-input/TextInput'
 import InfoBox from '../../components/info-box/InfoBox'
 import { Item } from '../../components/info-box/InfoBox.types'
 import { UserContext } from '../../context/UserContext'
-import { createOrder, validateDiscountCode } from '../../modules/AirTable/api'
+import { createOrder } from '../../modules/AirTable/api'
 import { makePayment } from '../../modules/rapydAPI/methods'
 import { useBookingStore } from '../../store/store'
 import { discountPrice, mapCurrencyToDisplay } from '../../utils/pricing'
@@ -25,22 +25,11 @@ import {
   stashPendingPurchase,
   trackAddPaymentInfo,
 } from '../../utils/analytics'
-import { InputContainer, Label } from './personal-info'
 
 const InfoBoxGrid = styled.div`
   display: grid;
   gap: 8px;
   margin-bottom: 24px;
-`
-
-const DiscountCodeContainer = styled.div`
-  display: flex;
-  gap: 16px;
-  flex-direction: column;
-
-  @media ${({ theme }) => theme.breakpoints.tablet} {
-    flex-direction: row;
-  }
 `
 
 const PriceContainer = styled.div`
@@ -67,24 +56,11 @@ const Price = styled.p<{ strikethrough?: boolean }>`
   opacity: ${(props) => (props.strikethrough ? 0.3 : 1)};
 `
 
-const DiscountCodeButton = styled.button`
-  font-family: ${({ theme }) => theme.fonts.poppins};
-  font-size: 16px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.green};
-  margin-bottom: 24px;
-  &:hover {
-    color: ${({ theme }) => theme.colors.yellow};
-    text-decoration: underline;
-  }
-`
-
 const ConfirmOrder = () => {
   const router = useRouter()
   const { locale } = router
   const t = locale === 'en' ? en : is
   const bookingState = useBookingStore((state) => state.booking)
-  const updateCustomer = useBookingStore((state) => state.updateCustomer)
   const { referrer } = useContext(UserContext)
   const methods = useForm<Customer>({})
 
@@ -93,22 +69,14 @@ const ConfirmOrder = () => {
     formState: { isSubmitting, isSubmitSuccessful },
   } = methods
 
-  const [discountCodeFound, setDiscountCodeFound] = useState<boolean | undefined>()
-  const [showDiscountCodeInput, setShowDiscountCodeInput] = useState<boolean>(false)
-
-  // eslint-disable-next-line no-unused-vars
-  const [discountCode, setDiscountCode] = useState<any>()
-
-  useEffect(() => {
-    const d = bookingState.customerInfo.discountCode
-    if (d && d.discount > 0) {
-      setDiscountCodeFound(true)
-      setDiscountCode({ Discount: d.discount })
-    } else {
-      setDiscountCodeFound(undefined)
-      setDiscountCode(undefined)
-    }
-  }, [bookingState.customerInfo.discountCode])
+  // Whether the customer has an active discount code in the booking store.
+  // Drives the strikethrough on the original price and conditionally renders
+  // the discounted price below. The DiscountCodeInput component handles all
+  // input/validation/store-write logic itself.
+  const hasAppliedDiscount = Boolean(
+    bookingState.customerInfo.discountCode &&
+      bookingState.customerInfo.discountCode.discount > 0,
+  )
 
   // eslint-disable-next-line no-unused-vars
   const onSubmit = async (_values: Customer) => {
@@ -157,9 +125,9 @@ const ConfirmOrder = () => {
       // Create order in Airtable with payment status incomplete
       const order: any = await createOrder(
         mapToOrder(freshBooking, locale ?? '', referrer ?? ''),
-      ).catch((error: Error) => {
+      ).catch((error: AirtableError) => {
         console.error('error')
-        throw new Error(error.error, error.message, error.statusCode)
+        throw new AirtableError(error.error, error.message, error.statusCode)
       })
       // If discount code is 100% then route user directly to success page
       if (useBookingStore.getState().booking.customerInfo.discountCode?.discount === 100) {
@@ -256,45 +224,6 @@ const ConfirmOrder = () => {
     },
   ]
 
-  const fetchDiscountCode = async (code: string) => {
-    setIsFetching(true)
-    try {
-      const result = await validateDiscountCode(code)
-
-      if (!result.valid) {
-        setDiscountCodeFound(false)
-        setDiscountCode(undefined)
-        toast.error(t.confirmOrderStep.discount.discountCodeInvalid)
-        updateCustomer({
-          ...bookingState.customerInfo,
-          discountCode: undefined,
-        })
-        return
-      }
-
-      // Successfully found an active discount code
-      updateCustomer({
-        ...bookingState.customerInfo,
-        discountCode: {
-          code: result.code || '',
-          discount: result.discount || 0,
-        },
-      })
-      setDiscountCode({ Discount: result.discount })
-      setDiscountCodeFound(true)
-      toast.success(`${t.confirmOrderStep.discount.discountCodeSuccessfullyAdded} ${result.discount}%`)
-    } catch (error) {
-      console.error(error)
-      setDiscountCodeFound(false)
-      toast.error(t.confirmOrderStep.discount.errorValidatingDiscountCode)
-    } finally {
-      setIsFetching(false)
-    }
-  }
-
-  const [inputValue, setInputValue] = useState<string>('')
-  const [isFetching, setIsFetching] = useState<boolean>(false)
-
   return (
     <FormProvider {...methods}>
       <Toaster toastOptions={{ style: { fontFamily: 'sans-serif' } }} />
@@ -310,47 +239,15 @@ const ConfirmOrder = () => {
             <InfoBox title={t.confirmOrderStep.pickUpInfoTitle} data={pickUpInformation} />
           </InfoBoxGrid>
 
-          {showDiscountCodeInput && (
-            <InputContainer>
-              <Label>{t.confirmOrderStep.discount.discountCode}</Label>
-              <DiscountCodeContainer>
-                <TextInput
-                  placeholder={t.confirmOrderStep.discount.inputPlaceholder}
-                  success={discountCodeFound}
-                  error={discountCodeFound === false}
-                  onChange={(e) => setInputValue(e.target.value)}
-                />
-                <Button
-                  type="button"
-                  loading={isFetching}
-                  disabled={isFetching || !inputValue}
-                  onClick={() => {
-                    if (inputValue === '') {
-                      setDiscountCodeFound(undefined)
-                      return
-                    }
-                    fetchDiscountCode(inputValue)
-                  }}
-                >
-                  {t.confirmOrderStep.discount.apply}
-                </Button>
-              </DiscountCodeContainer>
-            </InputContainer>
-          )}
-
-          <DiscountCodeButton
-            type="button"
-            onClick={() => setShowDiscountCodeInput((prev) => !prev)}
-          >
-            {showDiscountCodeInput
-              ? t.confirmOrderStep.discount.iDontHaveDiscountCode
-              : t.confirmOrderStep.discount.iHaveDiscountCode}
-          </DiscountCodeButton>
+          {/* DiscountCodeInput auto-expands + green-frames when a code is
+              already applied (e.g. customer entered it on bag-selection),
+              so we no longer need the local toggle / inline input here. */}
+          <DiscountCodeInput />
 
           <PriceContainer>
             <PriceLabel>{t.confirmOrderStep.totalPriceText}</PriceLabel>
             <div>
-              <Price strikethrough={discountCodeFound}>{`${mapCurrencyToDisplay(
+              <Price strikethrough={hasAppliedDiscount}>{`${mapCurrencyToDisplay(
                 bookingState.checkoutPrice.amount,
                 bookingState.checkoutPrice.currency,
               )}`}</Price>

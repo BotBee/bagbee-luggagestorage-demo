@@ -14,9 +14,15 @@ import { hydrateBookingFromDeepLinkQuery } from '../../utils/hydrateBookingFromD
 import { calculateCheckoutPrice } from '../../utils/pricing'
 import { ApplicationRoutes } from '../../utils/routing'
 import { buildCheckinItems, trackBeginCheckout } from '../../utils/analytics'
+import DiscountCodeInput from '../../components/discount-code-input/DiscountCodeInput'
+import { Toaster } from 'react-hot-toast'
 
 const ButtonContainer = styled.div`
   margin-top: 50px;
+`
+
+const DiscountSection = styled.div`
+  margin-top: 32px;
 `
 const BagSelection = () => {
   const router = useRouter()
@@ -87,7 +93,11 @@ const BagSelection = () => {
     <>
       <FormLayout title={t.bagSelectionStep.title} text={t.bagSelectionStep.subtitle}>
         <NextSeo title="Bagbee | Luggage items" />
+        <Toaster toastOptions={{ style: { fontFamily: 'sans-serif' } }} />
         <PriceCalculator hideTitle hideButton />
+        <DiscountSection>
+          <DiscountCodeInput />
+        </DiscountSection>
         <ButtonContainer>
           <Button
             type="submit"
