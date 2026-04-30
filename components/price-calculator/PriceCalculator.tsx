@@ -9,6 +9,7 @@ import CalcPlus from '../../public/icons/CalcPlus'
 import { useBookingStore } from '../../store/store'
 import {
   calculateCheckoutPrice,
+  discountPrice,
   mapCurrencyToDisplay,
 } from '../../utils/pricing'
 import { ApplicationRoutes } from '../../utils/routing'
@@ -82,6 +83,25 @@ const TotalBags = styled(Label)`
   margin-top: 12px;
   margin-bottom: -12px;
 `
+
+// Mirrors the strikethrough/discounted-price pattern from confirm-order so
+// the customer sees the same treatment of an applied discount code on every
+// page that surfaces the total.
+const PriceStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+`
+
+const StruckPrice = styled.p`
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 30px;
+  color: #000000;
+  text-decoration: line-through;
+  opacity: 0.35;
+  margin: 0;
+`
 interface IPriceCalculator {
   hideTitle?: boolean
   hideButton?: boolean
@@ -151,12 +171,32 @@ const PriceCalculator = ({ hideTitle, hideButton }: IPriceCalculator) => {
       </div>
       <PriceContainer>
         <PriceText>{t.bagSelectionStep.priceText}</PriceText>
-        <Title>
-          {mapCurrencyToDisplay(
-            calculateCheckoutPrice(numberOfBags, numberOfOddsize),
-            bookingState.checkoutPrice.currency
-          )}
-        </Title>
+        {(() => {
+          const fullPrice = calculateCheckoutPrice(numberOfBags, numberOfOddsize)
+          const dc = bookingState.customerInfo.discountCode
+          const hasDiscount = Boolean(dc && dc.discount > 0)
+          const discounted = hasDiscount
+            ? discountPrice(fullPrice, dc!.discount)
+            : fullPrice
+          return (
+            <PriceStack>
+              {hasDiscount && (
+                <StruckPrice>
+                  {mapCurrencyToDisplay(
+                    fullPrice,
+                    bookingState.checkoutPrice.currency,
+                  )}
+                </StruckPrice>
+              )}
+              <Title>
+                {mapCurrencyToDisplay(
+                  discounted,
+                  bookingState.checkoutPrice.currency,
+                )}
+              </Title>
+            </PriceStack>
+          )
+        })()}
       </PriceContainer>
       {!hideButton && (
         <Link href={ApplicationRoutes.pages.book}>
