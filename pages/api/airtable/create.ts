@@ -105,7 +105,16 @@ export default async function handler(
         const earliest = rule.earliestSlotStartHour
         const latest = rule.latestSlotStartHour
         const slotStart = parseSlotStartHour(slotLabel)
-        if (!slotIsAnyTime && slotStart != null) {
+        // Earliest/latest cutoffs apply to EVENING slots only — matching the
+        // rule in availability.ts. Morning slots (08:00–12:00 hours) describe
+        // the day-before / day-of-departure morning pickups; they're filtered
+        // separately by capacity + isUnserviced. Treating them with the same
+        // earliest threshold (e.g. 221's 19:00) would falsely reject every
+        // morning pickup. Customer 2026-04-30 hit this with a 10:00 slot in
+        // postal code 221 — availability said yes, create said no, and the
+        // submit button locked into an infinite spinner.
+        const slotIsMorning = slotStart != null && slotStart < 14
+        if (!slotIsAnyTime && !slotIsMorning && slotStart != null) {
           if (earliest != null && slotStart < earliest) {
             console.warn(
               '[api][create] rejecting slot before postcode earliest',

@@ -1,5 +1,5 @@
 import styled from '@emotion/styled'
-import { Error, FieldSet, Record } from 'airtable'
+import { Error } from 'airtable'
 import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
 import { useContext, useEffect, useState } from 'react'
@@ -155,7 +155,7 @@ const ConfirmOrder = () => {
       }
 
       // Create order in Airtable with payment status incomplete
-      const order: Record<FieldSet> = await createOrder(
+      const order: any = await createOrder(
         mapToOrder(freshBooking, locale ?? '', referrer ?? ''),
       ).catch((error: Error) => {
         console.error('error')
@@ -177,12 +177,31 @@ const ConfirmOrder = () => {
         /** Route user to Rapyd payment link */
         router.push(result.body.data.redirect_url)
       } else {
-        // TODO: Add sentry and error page?
-        console.error('no record id present!', order)
+        // createOrder fetches with res.json() regardless of status, so a
+        // 400/500 response surfaces here as { message, problems } instead
+        // of a record. Without throwing, react-hook-form treats the submit
+        // as successful → isSubmitSuccessful=true → button locks into an
+        // infinite spinner with no visible error (customer 2026-04-30
+        // bookings stuck at this exact step). Show the message and throw
+        // so the form re-enables.
+        const serverMessage = order?.message || order?.error
+        toast.error(
+          serverMessage ||
+            (locale === 'en'
+              ? 'Could not create your booking. Please try again or contact support.'
+              : 'Ekki tókst að stofna pöntunina. Reyndu aftur eða hafðu samband við okkur.'),
+        )
+        console.error('[confirm-order] createOrder returned no record id', order)
+        throw new Error(serverMessage || 'createOrder failed')
       }
     } catch (error) {
       // TODO: Add sentry
       console.error(error)
+      // Re-throw so react-hook-form sees the failure and isSubmitSuccessful
+      // stays false. Without this, the button's loading state (which is
+      // bound to isSubmitting || isSubmitSuccessful) stays true forever
+      // and the customer can't retry without reloading the page.
+      throw error
     }
   }
 
