@@ -142,8 +142,10 @@ const DiscountCodeInput = ({ forceExpanded = false }: IDiscountCodeInputProps) =
     }
   }
 
-  // Collapsed state: just the toggle button (only when no code is applied).
-  if (!expanded && !hasAppliedCode) {
+  // Collapsed: show the "Do you have a discount code?" toggle. An already-
+  // applied code stays in the store either way (price strikethrough still
+  // shows on confirm-order); the customer can re-expand to view/edit.
+  if (!expanded) {
     return (
       <ToggleButton type='button' onClick={() => setExpanded(true)}>
         {t.iHaveDiscountCode}
@@ -152,18 +154,17 @@ const DiscountCodeInput = ({ forceExpanded = false }: IDiscountCodeInputProps) =
   }
 
   return (
-    <Wrapper>
-      <Label>{t.discountCode}</Label>
-      <FieldRow>
-        <TextInput
-          placeholder={t.inputPlaceholder}
-          success={validationState === 'success'}
-          error={validationState === 'error'}
-          defaultValue={appliedDiscount?.code || ''}
-          onChange={(e) => setInputValue(e.target.value)}
-          disabled={hasAppliedCode}
-        />
-        {!hasAppliedCode && (
+    <>
+      <Wrapper>
+        <Label>{t.discountCode}</Label>
+        <FieldRow>
+          <TextInput
+            placeholder={t.inputPlaceholder}
+            success={validationState === 'success'}
+            error={validationState === 'error'}
+            defaultValue={appliedDiscount?.code || ''}
+            onChange={(e) => setInputValue(e.target.value)}
+          />
           <Button
             type='button'
             loading={isFetching}
@@ -172,9 +173,12 @@ const DiscountCodeInput = ({ forceExpanded = false }: IDiscountCodeInputProps) =
           >
             {t.apply}
           </Button>
-        )}
-      </FieldRow>
-    </Wrapper>
+        </FieldRow>
+      </Wrapper>
+      <ToggleButton type='button' onClick={() => setExpanded(false)}>
+        {t.iDontHaveDiscountCode}
+      </ToggleButton>
+    </>
   )
 }
 
