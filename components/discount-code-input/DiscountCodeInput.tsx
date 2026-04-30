@@ -26,13 +26,8 @@ interface IDiscountCodeInputProps {
   forceExpanded?: boolean
 }
 
-const Frame = styled.div<{ active: boolean }>`
-  background: ${({ active }) => (active ? '#f0fdf4' : 'transparent')};
-  border: ${({ active }) => (active ? '2px solid #1ddc40' : 'none')};
-  border-radius: 12px;
-  padding: ${({ active }) => (active ? '20px' : '0')};
+const Wrapper = styled.div`
   margin-bottom: 24px;
-  transition: background 0.2s ease, border 0.2s ease, padding 0.2s ease;
 `
 
 const FieldRow = styled.div`
@@ -70,18 +65,6 @@ const ToggleButton = styled.button`
   &:hover {
     color: ${({ theme }) => theme.colors.yellow};
     text-decoration: underline;
-  }
-`
-
-const AppliedSummary = styled.p`
-  font-family: ${({ theme }) => theme.fonts.poppins};
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a8536;
-  margin: 0;
-
-  span {
-    font-weight: 700;
   }
 `
 
@@ -169,17 +152,8 @@ const DiscountCodeInput = ({ forceExpanded = false }: IDiscountCodeInputProps) =
   }
 
   return (
-    <Frame active={hasAppliedCode}>
-      {hasAppliedCode && appliedDiscount ? (
-        <AppliedSummary>
-          {t.discountCodeSuccessfullyAdded}
-          <span>
-            {appliedDiscount.discount}% ({appliedDiscount.code})
-          </span>
-        </AppliedSummary>
-      ) : (
-        <Label>{t.discountCode}</Label>
-      )}
+    <Wrapper>
+      <Label>{t.discountCode}</Label>
       <FieldRow>
         <TextInput
           placeholder={t.inputPlaceholder}
@@ -200,7 +174,7 @@ const DiscountCodeInput = ({ forceExpanded = false }: IDiscountCodeInputProps) =
           </Button>
         )}
       </FieldRow>
-    </Frame>
+    </Wrapper>
   )
 }
 
