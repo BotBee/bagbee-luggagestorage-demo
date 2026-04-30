@@ -100,10 +100,21 @@ const PickUp = () => {
   const updateComments = useBookingStore((state) => state.updateComments)
   const methods = useForm<Customer>({})
   const { handleSubmit } = methods
+  // Truthy when pickupDate is a real future date — refuses today, the 1970
+  // rehydrate sentinel, and any other invalid value. Customer 2026-04-30
+  // submitted with pickupDate stamped as today because the previous
+  // disabled-check only verified pickupSlot, not pickupDate.
+  const todayMidnightMs = new Date().setHours(0, 0, 0, 0)
+  const pickupDateIsFuture =
+    bookingState.pickupInformation.pickupDate instanceof Date &&
+    !isNaN(bookingState.pickupInformation.pickupDate.getTime()) &&
+    bookingState.pickupInformation.pickupDate.getTime() > todayMidnightMs
+
   const onSubmit = async () => {
     if (
       !bookingState.pickupInformation.pickupLocation ||
-      !bookingState.pickupInformation.pickupSlot
+      !bookingState.pickupInformation.pickupSlot ||
+      !pickupDateIsFuture
     )
       return
     trackAddShippingInfo(
@@ -169,7 +180,8 @@ const PickUp = () => {
               type='submit'
               disabled={
                 !bookingState.pickupInformation.pickupLocation ||
-                !bookingState.pickupInformation.pickupSlot
+                !bookingState.pickupInformation.pickupSlot ||
+                !pickupDateIsFuture
               }
               fullWidth
             >

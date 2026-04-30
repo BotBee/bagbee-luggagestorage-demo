@@ -41,11 +41,16 @@ const validateOrderPayload = (item: AirtableOrder): string[] => {
   }
   const flightDate = parseYmd(item?.['Dagsetning flugs'] as unknown)
   const pickupDate = parseYmd(item?.['Dagsetning pick-up'] as unknown)
-  if (flightDate && flightDate.getTime() < today.getTime()) {
-    problems.push('flight date is in the past')
+  // `<= today` (not `<`) — the calendar's minDate already forces tomorrow
+  // or later, so an order arriving with today's date is always the
+  // dayjs(undefined) / merge-fallback bug, never a real booking.
+  // Customer 2026-04-30 had pickupDate stamped as today after the store's
+  // merge function reset it on rehydrate and the slot click never re-set it.
+  if (flightDate && flightDate.getTime() <= today.getTime()) {
+    problems.push('flight date is today or in the past — the calendar disallows this')
   }
-  if (pickupDate && pickupDate.getTime() < today.getTime()) {
-    problems.push('pickup date is in the past')
+  if (pickupDate && pickupDate.getTime() <= today.getTime()) {
+    problems.push('pickup date is today or in the past — the calendar disallows this')
   }
   return problems
 }

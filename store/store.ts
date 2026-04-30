@@ -351,11 +351,17 @@ export const useBookingStore = create<BookingState>()(
         },
       }),
       // On rehydrate, defend against a stored snapshot that's missing
-      // expected shape (e.g. v1 leftover where booking is partial). Ensure
-      // dates default to fresh `new Date()` so the calendar never lands on
-      // a stale day. Without this, the date click-handler's guard silently
-      // ate clicks when the persisted state was malformed.
+      // expected shape. We deliberately reset dates to `new Date(0)` (the
+      // 1970 epoch) instead of `new Date()` (today): both are valid Date
+      // instances so types are happy, but a 1970 sentinel is recognizable
+      // as "unset" — the server-side validator (and the /book/pick-up
+      // submit-disabled check) refuse it, forcing the user to actually
+      // click a slot/date instead of silently submitting with today's date.
+      // Customer 2026-04-30 had today's date stamped on their order
+      // because the previous fallback was `new Date()`, slot click never
+      // re-set it, and the submit-button check only verified the slot.
       merge: (persisted: any, current) => {
+        const SENTINEL_UNSET_DATE = new Date(0)
         const safe = { ...current }
         if (persisted?.booking) {
           safe.booking = {
@@ -364,14 +370,14 @@ export const useBookingStore = create<BookingState>()(
             flightInformation: {
               ...current.booking.flightInformation,
               ...(persisted.booking.flightInformation || {}),
-              departureDate: new Date(),
+              departureDate: SENTINEL_UNSET_DATE,
               arrivalDate: '',
               selectedFlight: undefined,
             },
             pickupInformation: {
               ...current.booking.pickupInformation,
               ...(persisted.booking.pickupInformation || {}),
-              pickupDate: new Date(),
+              pickupDate: SENTINEL_UNSET_DATE,
             },
             availableFlights: undefined,
           }
@@ -383,7 +389,7 @@ export const useBookingStore = create<BookingState>()(
             flightInformation: {
               ...current.fastTrack.flightInformation,
               ...(persisted.fastTrack.flightInformation || {}),
-              departureDate: new Date(),
+              departureDate: SENTINEL_UNSET_DATE,
               arrivalDate: '',
               selectedFlight: undefined,
             },
