@@ -10,6 +10,26 @@ const {
   publicRuntimeConfig: { rapydBaseUrl, rapydAccessKey },
 } = getAppConfig()
 
+// Safety net: Apple Pay / Google Pay finish on Rapyd's hosted page and
+// follow `complete_checkout_url`, NOT `complete_payment_url`. If the
+// caller forgot to set the wallet variants (the four inline payload
+// builders — /api/order/update, /api/tip/create, /api/fast-track/create,
+// /api/rapyd/retry — have all dropped them at various points in
+// history), copy the off-site redirect URLs over so wallet customers
+// don't land on the bagbee.is homepage. mapToPayment() in
+// common/mapper.ts also sets them explicitly.
+const ensureCheckoutUrls = (body: any): any => {
+  if (!body || typeof body !== 'object') return body
+  const next = { ...body }
+  if (!next.complete_checkout_url && next.complete_payment_url) {
+    next.complete_checkout_url = next.complete_payment_url
+  }
+  if (!next.cancel_checkout_url && next.error_payment_url) {
+    next.cancel_checkout_url = next.error_payment_url
+  }
+  return next
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -17,7 +37,8 @@ export default async function handler(
   try {
     const path = `/v1/checkout`
 
-    const result = await makeRequest(req.method || '', path, req.body)
+    const body = ensureCheckoutUrls(req.body)
+    const result = await makeRequest(req.method || '', path, body)
     res.status(200).json(result)
   } catch (err) {
     console.log('[api][rapyd] error', err)

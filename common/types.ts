@@ -211,8 +211,16 @@ export type RapydPaymentObject = {
   currency: string
   language: string
   merchant_reference_id: string
+  // 3DS / bank-redirect (off-site → back to site)
   complete_payment_url: string
   error_payment_url: string
+  // Wallets (Apple Pay / Google Pay) finish on Rapyd's hosted page —
+  // the "Finish" button there follows complete_checkout_url, NOT
+  // complete_payment_url. Without this, wallet users land on the
+  // dashboard-configured merchant_website fallback (= bagbee.is
+  // homepage). cancel_checkout_url is the back-out path equivalent.
+  complete_checkout_url: string
+  cancel_checkout_url: string
   metadata: RapydPaymentMetadata
 }
 

@@ -13,15 +13,7 @@ export const mapToPayment = (
   booking: Booking | FastTrackBooking,
   locale: string,
   tableType: 'baggage' | 'fast-track' = 'baggage'
-): RapydPaymentObject => ({
-  amount: discountPrice(
-    booking.checkoutPrice.amount,
-    booking.customerInfo.discountCode?.discount || 0,
-  ),
-  currency: booking.checkoutPrice.currency,
-  country: 'IS',
-  language: 'EN',
-  merchant_reference_id: 'bagbee',
+): RapydPaymentObject => {
   // Baggage bookings land on /orders/{5-char}?paid=true — the customer's
   // tracking page that already handles `?paid=true` (success banner +
   // shows full order details). The 5-char code is the last 5 chars of the
@@ -29,18 +21,39 @@ export const mapToPayment = (
   // legacy /payment/success page stays as a fallback for any old links.
   // Fast-Track stays on /payment/success because that flow doesn't have
   // a corresponding /orders/{code} tracking page yet.
-  complete_payment_url: tableType === 'baggage'
-    ? `https://${window.location.host}/${locale}/orders/${recordId.slice(-5)}?paid=true`
-    : `https://${window.location.host}/${locale}/payment/success?recordId=${recordId}`,
+  const completeUrl =
+    tableType === 'baggage'
+      ? `https://${window.location.host}/${locale}/orders/${recordId.slice(-5)}?paid=true`
+      : `https://${window.location.host}/${locale}/payment/success?recordId=${recordId}`
   // Carry recordId + tableType through to the cancel page so it can offer
   // a one-click "Retry payment" against the same Airtable record without
   // forcing the customer to redo the wizard.
-  error_payment_url: `https://${window.location.host}/${locale}/payment/cancel?recordId=${recordId}&type=${tableType}`,
-  metadata: {
-    recordId,
-    tableType,
-  },
-})
+  const cancelUrl = `https://${window.location.host}/${locale}/payment/cancel?recordId=${recordId}&type=${tableType}`
+  return {
+    amount: discountPrice(
+      booking.checkoutPrice.amount,
+      booking.customerInfo.discountCode?.discount || 0,
+    ),
+    currency: booking.checkoutPrice.currency,
+    country: 'IS',
+    language: 'EN',
+    merchant_reference_id: 'bagbee',
+    complete_payment_url: completeUrl,
+    error_payment_url: cancelUrl,
+    // Wallet redirects MUST be set or Apple Pay / Google Pay land on
+    // bagbee.is homepage instead of the order page. Customer reported
+    // 2026-04-30 that an Apple Pay payment redirected to /; the four
+    // Rapyd entry points had silently lost the Apr 23 fix that added
+    // these. /api/rapyd.ts also copies *_payment_url → *_checkout_url
+    // as a safety net for the other 4 inline-payload callsites.
+    complete_checkout_url: completeUrl,
+    cancel_checkout_url: cancelUrl,
+    metadata: {
+      recordId,
+      tableType,
+    },
+  }
+}
 
 // Sanity-check the booking state before we write a row to Airtable.
 // Returns an array of human-readable problems (empty array = valid).
