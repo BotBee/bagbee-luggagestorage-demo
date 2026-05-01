@@ -22,6 +22,7 @@ interface ICharterPassengerCardProps {
   // on mount (if a previous submission exists in Leiguflug) and right after
   // a fresh submit. Lets /orders/[orderNo].tsx pre-fill the Fast-Track form
   // with the same names without re-asking the customer.
+  // eslint-disable-next-line no-unused-vars
   onPassengersAvailable?: (passengers: string[]) => void
 }
 
@@ -222,6 +223,11 @@ const CharterPassengerCard = ({
     return () => {
       cancelled = true
     }
+    // onPassengersAvailable is treated as a stable callback (the parent
+    // passes the useState setter directly, which React guarantees stable).
+    // Adding it to deps would re-fire the status fetch on every parent
+    // render that creates a new function ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId])
 
   const updatePassenger = (i: number, name: string) => {
