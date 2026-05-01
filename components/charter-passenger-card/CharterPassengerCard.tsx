@@ -18,6 +18,11 @@ interface ICharterPassengerCardProps {
   flightNumber: string
   customerName: string
   locale: string
+  // Notifies the parent whenever this card knows the passenger list — both
+  // on mount (if a previous submission exists in Leiguflug) and right after
+  // a fresh submit. Lets /orders/[orderNo].tsx pre-fill the Fast-Track form
+  // with the same names without re-asking the customer.
+  onPassengersAvailable?: (passengers: string[]) => void
 }
 
 const Card = styled.section`
@@ -179,6 +184,7 @@ const CharterPassengerCard = ({
   flightNumber,
   customerName,
   locale,
+  onPassengersAvailable,
 }: ICharterPassengerCardProps) => {
   const t = useMemo(() => (locale === 'en' ? en : is).orderTrackingPage, [locale])
 
@@ -202,9 +208,9 @@ const CharterPassengerCard = ({
         const data = await res.json()
         if (cancelled) return
         if (data?.submitted) {
-          setSubmittedNames(
-            Array.isArray(data.passengers) ? data.passengers : [],
-          )
+          const names = Array.isArray(data.passengers) ? data.passengers : []
+          setSubmittedNames(names)
+          if (names.length > 0) onPassengersAvailable?.(names)
         }
       } catch {
         // Soft-fail — show the form. Worst case the customer submits twice
@@ -256,7 +262,9 @@ const CharterPassengerCard = ({
       if (!res.ok) {
         throw new Error(data?.error || data?.message || 'Failed')
       }
-      setSubmittedNames(passengers.map((p) => p.trim()).filter(Boolean))
+      const finalNames = passengers.map((p) => p.trim()).filter(Boolean)
+      setSubmittedNames(finalNames)
+      if (finalNames.length > 0) onPassengersAvailable?.(finalNames)
     } catch (err: any) {
       console.error('[charter] submit error', err)
       setError(t.charterError)

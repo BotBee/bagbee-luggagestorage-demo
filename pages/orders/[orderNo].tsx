@@ -751,6 +751,12 @@ const OrderPage = ({
   const lightboxTouchStartX = useRef<number | null>(null)
   const lightboxTouchStartY = useRef<number | null>(null)
 
+  // Charter-flight passenger names (from Leiguflug, populated by the
+  // CharterPassengerCard either from a previous submission or a fresh one).
+  // Used to pre-fill the Fast-Track form so the customer doesn't have to
+  // re-type every passenger.
+  const [charterPassengers, setCharterPassengers] = useState<string[]>([])
+
   // Fast-Track state
   const [showFastTrack, setShowFastTrack] = useState(false)
   const [ftPassengers, setFtPassengers] = useState<
@@ -981,14 +987,37 @@ const OrderPage = ({
   const customerFirstName = String(fields['First Name (fx)'] || '')
   const customerLastName = String(fields['Last Name (fx)'] || '')
 
+  // Splits a single full-name string (as collected by the charter card) into
+  // the firstName/lastName shape the Fast-Track form expects. Treats the
+  // last whitespace-separated token as the last name and everything before
+  // as the first name(s) — works for typical Icelandic names like
+  // "Kristín Fjola Gunnlaugsdóttir" → "Kristín Fjola" / "Gunnlaugsdóttir".
+  const splitFullName = (full: string): { firstName: string; lastName: string } => {
+    const parts = full.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return { firstName: '', lastName: '' }
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+    return {
+      firstName: parts.slice(0, -1).join(' '),
+      lastName: parts[parts.length - 1],
+    }
+  }
+
   const openFastTrack = () => {
-    // Pre-fill passenger 1 with the main customer's name
-    setFtPassengers([
-      {
-        firstName: customerFirstName,
-        lastName: customerLastName,
-      },
-    ])
+    // Pre-fill passenger 1 with the main customer's name. If the charter
+    // card already collected a passenger list (Leiguflug), pre-fill the
+    // rest of the Fast-Track form with those names too — Fast-Track caps
+    // at 4 passengers, so we slice. Each charter "Full name" gets split
+    // into firstName/lastName via splitFullName above.
+    const charterPrefilled = charterPassengers
+      .slice(0, 4)
+      .map((name) => splitFullName(name))
+
+    const initialFt =
+      charterPrefilled.length > 0
+        ? charterPrefilled
+        : [{ firstName: customerFirstName, lastName: customerLastName }]
+
+    setFtPassengers(initialFt)
     setFtError('')
     setShowFastTrack(true)
   }
@@ -1212,6 +1241,7 @@ const OrderPage = ({
               flightNumber={flightNumber}
               customerName={(fields['Nafn viðskiptavinar'] as string) || ''}
               locale={router.locale ?? 'is'}
+              onPassengersAvailable={setCharterPassengers}
             />
           )
         })()}
