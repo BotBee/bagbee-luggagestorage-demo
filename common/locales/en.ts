@@ -306,6 +306,25 @@ const orderTrackingPage = {
   tipProcessing: 'Processing...',
   tipSuccess: 'Thank you! Your tip has been sent to the driver.',
   tipError: 'Tip payment failed. Please try again.',
+
+  // Charter-flight passenger collection (FI1XXX flights only).
+  // Replaces the legacy email→Fillout-form flow.
+  charterTitle: 'Charter flight — please list your passengers',
+  charterIntro:
+    'Flight {flightNumber} with Icelandair is a charter flight, so we need every passenger’s full name to check baggage in for the whole party. Boarding passes will be emailed to you from Icelandair.',
+  charterBaggageNote:
+    'Baggage allowance on charter flights is usually 1 bag per passenger. Some charters (typically golf and ski trips) allow 2 bags per passenger — in that case, BagBee will check in the second bag at the airport and email you a photo of the bag tag.',
+  charterPassengerLabel: 'Passenger {n} — full name',
+  charterMainPassenger: 'Main passenger',
+  charterAddPassenger: '+ Add passenger',
+  charterRemovePassenger: 'Remove',
+  charterSubmit: 'Send passenger list',
+  charterSubmitting: 'Sending...',
+  charterSuccessTitle: 'Thank you!',
+  charterSuccessText:
+    'We have your passenger list and will handle check-in. Boarding passes will arrive by email.',
+  charterError:
+    'Could not send passenger list. Please try again or contact us.',
 }
 
 const en = {

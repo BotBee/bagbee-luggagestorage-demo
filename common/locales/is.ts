@@ -308,6 +308,25 @@ const orderTrackingPage = {
   tipProcessing: '',
   tipSuccess: '',
   tipError: '',
+
+  // Charter-flight passenger collection (FI1XXX flights only).
+  // Replaces the legacy email→Fillout-form flow.
+  charterTitle: 'Leiguflug — vinsamlegast skráðu farþegana',
+  charterIntro:
+    'Flug {flightNumber} með Icelandair er leiguflug. Við þurfum að vita nöfn allra farþega sem munu innrita farangur með BagBee til að geta innritað þá. Brottfararspjöldin verða send með tölvupósti úr kerfi Icelandair.',
+  charterBaggageNote:
+    'Farangursheimild á leiguflugum er venjulega 1 taska á mann. Á sumum leiguflugum, helst í golf- og skíðaferðum, er heimildin tvær töskur á mann — þá innritum við aðra töskuna á flugvellinum og sendum þér mynd af farangursmiðanum.',
+  charterPassengerLabel: 'Farþegi {n} — fullt nafn',
+  charterMainPassenger: 'Aðalfarþegi',
+  charterAddPassenger: '+ Bæta við farþega',
+  charterRemovePassenger: 'Fjarlægja',
+  charterSubmit: 'Senda farþegalista',
+  charterSubmitting: 'Sendi...',
+  charterSuccessTitle: 'Takk fyrir!',
+  charterSuccessText:
+    'Við höfum móttekið farþegalistann og sjáum um innritunina. Þið fáið brottfararspjöldin í tölvupósti.',
+  charterError:
+    'Ekki tókst að senda farþegalistann. Reyndu aftur eða hafðu samband við okkur.',
 }
 
 const is = {

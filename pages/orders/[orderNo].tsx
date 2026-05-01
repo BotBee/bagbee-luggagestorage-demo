@@ -15,6 +15,7 @@ import en from '../../common/locales/en'
 import is from '../../common/locales/is'
 import { useBookingStore } from '../../store/store'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
+import CharterPassengerCard from '../../components/charter-passenger-card/CharterPassengerCard'
 
 // Format a phone number for display.
 // Defaults to Iceland (+354) when the number has no country code (most BagBee
@@ -1196,6 +1197,24 @@ const OrderPage = ({
             })}
           </ProgressContainer>
         </Section>
+
+        {/* Charter-flight passenger collection. Only renders when the flight
+            number matches Icelandair's leiguflug pattern (FI1 + 3 digits,
+            e.g. FI1080). BagBee needs every passenger's name in the party
+            to perform the airline-side check-in via Amadeus. Replaces the
+            legacy email→Fillout-form flow. */}
+        {(() => {
+          const flightNumber = (fields['Flugnúmer'] as string) || ''
+          if (!/^FI1\d{3}$/.test(flightNumber)) return null
+          return (
+            <CharterPassengerCard
+              recordId={order.id}
+              flightNumber={flightNumber}
+              customerName={(fields['Nafn viðskiptavinar'] as string) || ''}
+              locale={router.locale ?? 'is'}
+            />
+          )
+        })()}
 
         {/* Order Details */}
         <Section>

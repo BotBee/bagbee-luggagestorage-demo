@@ -243,6 +243,22 @@ const getOptimoStopsTable = (): Table<FieldSet> => {
   return base(OPTIMO_STOPS_TABLE_ID)
 }
 
+/**
+ * Leiguflug (charter flight) table — stores per-passenger names for orders
+ * whose flight number matches the charter pattern (FI1\d{3}, e.g. FI1080).
+ * BagBee needs every passenger's full name to perform check-in via Amadeus
+ * for the whole party. Customers used to fill this in via an external Fillout
+ * form linked from an email; we now collect it inline on /orders/{code}.
+ */
+const getLeiguflugTable = (): Table<FieldSet> => {
+  Airtable.configure({
+    apiKey: airtableAccessToken,
+    endpointUrl: airtableEndpointUrl,
+  })
+  const base = Airtable.base(airtableBaseId)
+  return base('Leiguflug')
+}
+
 export {
   getTable,
   getPickupConfig,
@@ -257,4 +273,5 @@ export {
   getOrdersLookupTable,
   getTagNumbersTable,
   getOptimoStopsTable,
+  getLeiguflugTable,
 }
