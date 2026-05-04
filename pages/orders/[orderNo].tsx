@@ -1334,7 +1334,12 @@ const OrderPage = ({
 
         {/* Fast-Track — collapsed promo OR expanded form, in the same slot
             so opening the form replaces the card in place (not below the bag photos) */}
-        {!isEditing && !editSubmitted && !showFastTrack && (
+        {/* Fast-Track is hidden only while the customer is actively in the
+            order-edit form (focus reasons) — NOT after the edit has been
+            submitted. Previously `!editSubmitted` was in the gate, which
+            silently removed Fast-Track for the rest of the order's life
+            once the customer had ever updated bag count / time window. */}
+        {!isEditing && !showFastTrack && (
           <ActionGrid>
             <ActionCard variant='primary'>
               <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
@@ -1346,7 +1351,7 @@ const OrderPage = ({
             </ActionCard>
           </ActionGrid>
         )}
-        {!isEditing && !editSubmitted && showFastTrack && (
+        {!isEditing && showFastTrack && (
           <Section>
             <EditSection>
               <EditTitle>{t.fastTrackSectionTitle}</EditTitle>
