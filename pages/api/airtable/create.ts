@@ -98,23 +98,30 @@ export default async function handler(
             message: `Postal code ${postalCode} is not currently serviced for pickup.`,
           })
         }
-        // The 3-hour "any-time" 19:00 - 22:00 slot is exempt from the
-        // earliest/latest postcode cutoffs (matches availability API).
-        const ANY_TIME_SLOT = '19:00 - 22:00'
-        const slotIsAnyTime = slotLabel.trim() === ANY_TIME_SLOT
-        const earliest = rule.earliestSlotStartHour
-        const latest = rule.latestSlotStartHour
+        // Two parallel rule-sets: evening route uses earliestSlotStartHour
+        // / latestSlotStartHour; morning route uses the morning equivalents.
+        // Each route has its own "any-time" full-window slot that's exempt
+        // from earliest/latest (driver can swing by anytime in the window).
+        const ANY_TIME_EVENING_SLOT = '19:00 - 22:00'
+        const ANY_TIME_MORNING_SLOT = '09:00 - 12:00'
+        const slotIsAnyTimeEvening = slotLabel.trim() === ANY_TIME_EVENING_SLOT
+        const slotIsAnyTimeMorning = slotLabel.trim() === ANY_TIME_MORNING_SLOT
         const slotStart = parseSlotStartHour(slotLabel)
-        // Earliest/latest cutoffs apply to EVENING slots only — matching the
-        // rule in availability.ts. Morning slots (08:00–12:00 hours) describe
-        // the day-before / day-of-departure morning pickups; they're filtered
-        // separately by capacity + isUnserviced. Treating them with the same
-        // earliest threshold (e.g. 221's 19:00) would falsely reject every
-        // morning pickup. Customer 2026-04-30 hit this with a 10:00 slot in
-        // postal code 221 — availability said yes, create said no, and the
-        // submit button locked into an infinite spinner.
+        // Heuristic split: < 14h start = morning route, >= 14h = evening
+        // route. Matches the slot definitions in availability.ts (08:00,
+        // 09:00, 10:00, 11:00 vs 17:00–22:00). Rejects the morning slot
+        // class when its postcode-specific earliest/latest fail.
         const slotIsMorning = slotStart != null && slotStart < 14
-        if (!slotIsAnyTime && !slotIsMorning && slotStart != null) {
+        const earliest = slotIsMorning
+          ? rule.earliestMorningSlotStartHour
+          : rule.earliestSlotStartHour
+        const latest = slotIsMorning
+          ? rule.latestMorningSlotStartHour
+          : rule.latestSlotStartHour
+        const slotIsAnyTime = slotIsMorning
+          ? slotIsAnyTimeMorning
+          : slotIsAnyTimeEvening
+        if (!slotIsAnyTime && slotStart != null) {
           if (earliest != null && slotStart < earliest) {
             console.warn(
               '[api][create] rejecting slot before postcode earliest',

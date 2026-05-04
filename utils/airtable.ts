@@ -116,6 +116,7 @@ const getPickupConfigMatrix = async (defaultTimeslotMax: number) => {
 export type PostalCodeRule = {
   postalCode: string
   service: boolean
+  // EVENING route (17:00-22:00 hourly slots + the 19:00-22:00 any-time slot).
   // Start hour of the earliest allowed evening slot, e.g. '19:00 - 20:00' → 19.
   // The driver can't reach this postcode before this hour — slots starting
   // earlier are filtered out. null means no earliest restriction.
@@ -124,6 +125,15 @@ export type PostalCodeRule = {
   // null means no time-based restriction (Service is on, all evening slots
   // allowed by this rule — capacity check still applies separately).
   latestSlotStartHour: number | null
+  // MORNING route (08:00-12:00 hourly slots + the 09:00-12:00 any-time slot).
+  // Same semantics as the evening pair above, but for the morning route.
+  // Airtable columns: 'Earliest morning pickup slot' / 'Latest morning
+  // pickup slot' — singleSelect with values like '08:00 - 09:00'. If the
+  // columns are absent or empty, morning slots are gated only by the
+  // Service flag (no time-based restriction), matching the pre-rule
+  // behaviour.
+  earliestMorningSlotStartHour: number | null
+  latestMorningSlotStartHour: number | null
 }
 
 const POSTAL_CODE_CUTOFFS_TTL_MS = 5 * 60 * 1000
@@ -149,9 +159,12 @@ const getPostalCodeCutoffs = async (): Promise<Record<string, PostalCodeRule>> =
 
   try {
     const base = getBase()
-    const records = await base('Postal Code Cutoffs')
-      .select({ fields: ['Postal code', 'Service', 'Latest pickup slot', 'Earliest pickup slot'] })
-      .all()
+    // We don't enumerate fields anymore — Airtable returns whatever's on
+    // the row, and we read the morning columns optionally. Lets ops add
+    // 'Earliest morning pickup slot' / 'Latest morning pickup slot' on
+    // their own schedule without requiring a code change to start
+    // honoring them.
+    const records = await base('Postal Code Cutoffs').select().all()
 
     const rules: Record<string, PostalCodeRule> = {}
     for (const record of records) {
@@ -161,6 +174,12 @@ const getPostalCodeCutoffs = async (): Promise<Record<string, PostalCodeRule>> =
       const latestSlot = typeof rawLatest === 'string' ? rawLatest : null
       const rawEarliest = record.fields['Earliest pickup slot']
       const earliestSlot = typeof rawEarliest === 'string' ? rawEarliest : null
+      const rawMorningLatest = record.fields['Latest morning pickup slot']
+      const morningLatestSlot =
+        typeof rawMorningLatest === 'string' ? rawMorningLatest : null
+      const rawMorningEarliest = record.fields['Earliest morning pickup slot']
+      const morningEarliestSlot =
+        typeof rawMorningEarliest === 'string' ? rawMorningEarliest : null
       rules[postalCode.trim()] = {
         postalCode: postalCode.trim(),
         // Airtable checkboxes return true/undefined; treat anything other
@@ -169,6 +188,8 @@ const getPostalCodeCutoffs = async (): Promise<Record<string, PostalCodeRule>> =
         service: record.fields['Service'] !== false,
         earliestSlotStartHour: parseSlotStartHour(earliestSlot),
         latestSlotStartHour: parseSlotStartHour(latestSlot),
+        earliestMorningSlotStartHour: parseSlotStartHour(morningEarliestSlot),
+        latestMorningSlotStartHour: parseSlotStartHour(morningLatestSlot),
       }
     }
 

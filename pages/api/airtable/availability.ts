@@ -79,28 +79,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
 
     // Postal-code rule lookup. Empty string / unknown postcode → no rule
-    // applies (legacy behaviour: capacity-only check). Currently only applied
-    // to evening slots; morning slots are unrestricted by postcode for now.
+    // applies (legacy behaviour: capacity-only check). Earliest/latest are
+    // tracked separately for evening and morning routes — drivers run two
+    // different routes with different reachability windows per postcode.
     const postalCodeRules = await getPostalCodeCutoffs()
     const postalRule = postalCode ? postalCodeRules[postalCode] : undefined
     const isUnserviced = postalRule ? postalRule.service === false : false
     const earliestStartHour = postalRule ? postalRule.earliestSlotStartHour : null
     const latestStartHour = postalRule ? postalRule.latestSlotStartHour : null
+    const earliestMorningStartHour = postalRule
+      ? postalRule.earliestMorningSlotStartHour
+      : null
+    const latestMorningStartHour = postalRule
+      ? postalRule.latestMorningSlotStartHour
+      : null
 
-    // The 3-hour "any-time" 19:00 - 22:00 slot is exempt from earliest/latest
-    // cutoffs — it covers the full evening window so the driver can swing by
-    // whenever they're in the area. This matches the "also 19:00-22:00"
-    // column in the postcode rules table (every serviced row keeps it on).
-    const ANY_TIME_SLOT = '19:00 - 22:00'
+    // "Any-time" slots are exempt from earliest/latest cutoffs — they cover
+    // the full window so the driver can swing by whenever they're in the
+    // area. 19:00-22:00 covers the full evening window; 09:00-12:00 covers
+    // the full morning window. Same convention as the "also 19:00-22:00"
+    // column in the postcode rules table.
+    const ANY_TIME_EVENING_SLOT = '19:00 - 22:00'
+    const ANY_TIME_MORNING_SLOT = '09:00 - 12:00'
 
-    const slotPassesPostalRule = (slotKey: string): boolean => {
+    const eveningSlotPassesPostalRule = (slotKey: string): boolean => {
       if (isUnserviced) return false
       const slotLabel = slotKey.split('/')[1] ?? ''
-      if (slotLabel === ANY_TIME_SLOT) return true
+      if (slotLabel === ANY_TIME_EVENING_SLOT) return true
       const slotStartHour = parseSlotStartHour(slotLabel)
       if (slotStartHour == null) return true
       if (earliestStartHour != null && slotStartHour < earliestStartHour) return false
       if (latestStartHour != null && slotStartHour > latestStartHour) return false
+      return true
+    }
+
+    const morningSlotPassesPostalRule = (slotKey: string): boolean => {
+      if (isUnserviced) return false
+      const slotLabel = slotKey.split('/')[1] ?? ''
+      if (slotLabel === ANY_TIME_MORNING_SLOT) return true
+      const slotStartHour = parseSlotStartHour(slotLabel)
+      if (slotStartHour == null) return true
+      if (
+        earliestMorningStartHour != null &&
+        slotStartHour < earliestMorningStartHour
+      ) {
+        return false
+      }
+      if (
+        latestMorningStartHour != null &&
+        slotStartHour > latestMorningStartHour
+      ) {
+        return false
+      }
       return true
     }
 
@@ -113,16 +143,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // If it's same day, don't allow morning slots
         if (slotDate.isSame(currentTime, 'day')) return false
         if (isMorningPickupPastBookingCutoff(slotDate)) return false
-        // If the postcode is unserviced, hide morning slots too (driver
-        // doesn't go there at all). Time-based cutoffs only apply to evening
-        // slots, so we skip the cutoff check here.
-        if (isUnserviced) return false
+        // Apply postcode-based earliest/latest morning cutoffs (same logic
+        // as evening, gated by morning-specific Airtable columns). If the
+        // postcode is unserviced, the rule helper already returns false.
+        if (!morningSlotPassesPostalRule(key)) return false
         return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
       }),
       eveningSlots: mapValues(eveningSlots, (_, key) => {
         const maxPickups = pickupConfigMatrix[key] || defaultTimeslotMax
         if (maxPickups <= 0) return false
-        if (!slotPassesPostalRule(key)) return false
+        if (!eveningSlotPassesPostalRule(key)) return false
         return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
       }),
     }
