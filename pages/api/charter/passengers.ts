@@ -52,6 +52,9 @@ export default async function handler(
       (orderRecord.fields['Tölvupóstfang'] as string | undefined) ||
       (orderRecord.fields['Pickup e-mail address'] as string | undefined) ||
       ''
+    const flightDate = orderRecord.fields['Dagsetning flugs'] as
+      | string
+      | undefined
 
     const leiguflugTable = getLeiguflugTable()
 
@@ -66,6 +69,7 @@ export default async function handler(
     const fields: { [key: string]: any } = {
       Email: email,
     }
+    if (flightDate) fields['Flight date'] = flightDate
     cleaned.forEach((name, i) => {
       fields[`Passenger ${i + 1}`] = name
     })

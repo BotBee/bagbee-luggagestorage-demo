@@ -7,6 +7,16 @@ import { getLeiguflugTable } from '../../../utils/airtable'
  * "thanks, we have your info" state.
  *
  * GET /api/charter/status?recordId=recXXXXXXXXXXXXXX
+ *
+ * Lookup strategy: pull the latest 200 Leiguflug records and check
+ * every field on each row to see if any string array contains the
+ * order's recordId. This is robust to the linked-record field being
+ * named anything (Pöntunarnúmer / Pöntun / Order / etc.) — we don't
+ * have to guess. Earlier sort+filter version sorted by `Flight date`
+ * desc + maxRecords:50 + assumed the field was named `Pöntunarnúmer`,
+ * and missed records when either of those assumptions was wrong
+ * (e.g. when the new row had no Flight date set yet, it sorted to
+ * the bottom and fell off the first 50). Reported by user 2026-05-04.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -19,27 +29,28 @@ export default async function handler(
 
   try {
     const table = getLeiguflugTable()
-    // Filter on the linked-record field — its formula representation is the
-    // primary field of the linked Orders row, but ARRAYJOIN lets us match
-    // by the order's record id via a roundabout. Simpler: filter by Email or
-    // by the link's display value. For robustness we just pull a small page
-    // and look for matches in JS.
     let rows: ReadonlyArray<any> = []
     try {
       rows = (await table
-        .select({ maxRecords: 50, sort: [{ field: 'Flight date', direction: 'desc' }] })
+        .select({ maxRecords: 200 })
         .firstPage()) as ReadonlyArray<any>
     } catch {
       rows = []
     }
 
-    const linked = rows.filter((r: any) => {
-      const linkedField = r.fields['Pöntunarnúmer'] as
-        | Array<string>
-        | undefined
-      if (!Array.isArray(linkedField)) return false
-      return linkedField.some((id) => id === recordId)
-    })
+    const containsRecordId = (r: any): boolean => {
+      const fields = r?.fields || {}
+      for (const value of Object.values(fields)) {
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            if (typeof item === 'string' && item === recordId) return true
+          }
+        }
+      }
+      return false
+    }
+
+    const linked = rows.filter(containsRecordId)
 
     if (linked.length === 0) {
       return res.status(200).json({ submitted: false })
