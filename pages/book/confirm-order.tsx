@@ -19,7 +19,6 @@ import { createOrder } from '../../modules/AirTable/api'
 import { makePayment } from '../../modules/rapydAPI/methods'
 import { useBookingStore } from '../../store/store'
 import { discountPrice, mapCurrencyToDisplay } from '../../utils/pricing'
-import { ApplicationRoutes } from '../../utils/routing'
 import {
   buildCheckinItems,
   stashPendingPurchase,
@@ -129,9 +128,17 @@ const ConfirmOrder = () => {
         console.error('error')
         throw new AirtableError(error.error, error.message, error.statusCode)
       })
-      // If discount code is 100% then route user directly to success page
+      // 100% discount → no Rapyd round-trip, go straight to the order
+      // tracking page in the same shape a paid order lands on. mapToOrder
+      // already writes Greitt=true for 100%-off orders, so the page renders
+      // as Confirmed immediately. The legacy /payment/success route only
+      // remains as a fallback for fast-track and any pre-tracking-page
+      // links still in the wild.
       if (useBookingStore.getState().booking.customerInfo.discountCode?.discount === 100) {
-        router.push(`${ApplicationRoutes.success}?recordId=${order.id}`)
+        const recordId: string = order.id
+        const last5 = recordId.slice(-5)
+        const localePrefix = locale ? `/${locale}` : ''
+        router.push(`${localePrefix}/orders/${last5}?paid=true`)
         return
       }
 
