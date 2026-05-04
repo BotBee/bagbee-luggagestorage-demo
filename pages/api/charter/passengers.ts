@@ -55,6 +55,14 @@ export default async function handler(
     const flightDate = orderRecord.fields['Dagsetning flugs'] as
       | string
       | undefined
+    const flightNumber = (orderRecord.fields['Flugnúmer'] as
+      | string
+      | undefined) || ''
+    const orderId = orderRecord.fields['Order ID']
+    const orderNumberStr =
+      typeof orderId === 'number' || typeof orderId === 'string'
+        ? String(orderId)
+        : ''
 
     const leiguflugTable = getLeiguflugTable()
 
@@ -70,14 +78,17 @@ export default async function handler(
       Email: email,
     }
     if (flightDate) fields['Flight date'] = flightDate
+    if (flightNumber) fields['FlightNumber'] = flightNumber
+    if (orderNumberStr) fields['order number'] = orderNumberStr
     cleaned.forEach((name, i) => {
       fields[`Passenger ${i + 1}`] = name
     })
 
     // Linked-record back to Orders. The Fast Track table uses 'Pöntunarnúmer'
-    // for the same purpose; same convention is most likely here. If Airtable
-    // returns "unknown field name" on this key, the actual field name is
-    // different on Leiguflug — check the table schema and update.
+    // for the same purpose, and existing Leiguflug rows show numeric Order IDs
+    // there (the linked Orders row's primary field). If Airtable returns
+    // "unknown field name" on this key the column has been renamed — check
+    // the table schema and update.
     fields['Pöntunarnúmer'] = [recordId]
 
     const created = await leiguflugTable.create([{ fields }] as any)

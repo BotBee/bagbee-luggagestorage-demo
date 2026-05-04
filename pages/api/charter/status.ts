@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { getLeiguflugTable } from '../../../utils/airtable'
+import { getLeiguflugTable, getOrdersLookupTable } from '../../../utils/airtable'
 
 /**
  * Has this order already submitted its charter-flight passenger list?
@@ -28,6 +28,21 @@ export default async function handler(
   }
 
   try {
+    // Look up the order's numeric Order ID so we can match Leiguflug rows
+    // by the text `order number` column too. This is the redundant path:
+    // even if the `Pöntunarnúmer` linked-record write silently drops, the
+    // text field gives us a deterministic match.
+    let orderNumberStr = ''
+    try {
+      const orderRecord = await getOrdersLookupTable().find(recordId)
+      const orderId = orderRecord.fields['Order ID']
+      if (typeof orderId === 'number' || typeof orderId === 'string') {
+        orderNumberStr = String(orderId)
+      }
+    } catch {
+      // Fall through — we'll still try the linked-record scan below.
+    }
+
     const table = getLeiguflugTable()
     let rows: ReadonlyArray<any> = []
     try {
@@ -38,8 +53,9 @@ export default async function handler(
       rows = []
     }
 
-    const containsRecordId = (r: any): boolean => {
+    const matchesOrder = (r: any): boolean => {
       const fields = r?.fields || {}
+      // Path 1: linked-record field — any string array containing recordId.
       for (const value of Object.values(fields)) {
         if (Array.isArray(value)) {
           for (const item of value) {
@@ -47,10 +63,26 @@ export default async function handler(
           }
         }
       }
+      // Path 2: text `order number` field matches the order's Order ID.
+      if (orderNumberStr) {
+        const orderNumberField = fields['order number']
+        if (
+          typeof orderNumberField === 'string' &&
+          orderNumberField.trim() === orderNumberStr
+        ) {
+          return true
+        }
+        if (
+          typeof orderNumberField === 'number' &&
+          String(orderNumberField) === orderNumberStr
+        ) {
+          return true
+        }
+      }
       return false
     }
 
-    const linked = rows.filter(containsRecordId)
+    const linked = rows.filter(matchesOrder)
 
     if (linked.length === 0) {
       return res.status(200).json({ submitted: false })
