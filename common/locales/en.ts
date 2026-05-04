@@ -248,8 +248,7 @@ const orderTrackingPage = {
 
   // Messages
   changesSaved: 'Your changes have been saved. You will receive an updated confirmation.',
-  paymentSuccess:
-    'Payment successful! Your order has been updated and you will receive an updated confirmation.',
+  paymentSuccess: 'Payment successful! Your order has been confirmed.',
   paymentError: 'Payment failed. Please try again or contact BagBee for assistance.',
 
   // Fast-Track
@@ -318,8 +317,8 @@ const orderTrackingPage = {
   charterMainPassenger: 'Main passenger',
   charterAddPassenger: '+ Add passenger',
   charterRemovePassenger: 'Remove',
-  charterSubmit: 'Send passenger list',
-  charterSubmitting: 'Sending...',
+  charterSubmit: 'Register passengers',
+  charterSubmitting: 'Registering...',
   charterSuccessTitle: 'Thank you!',
   charterSuccessText:
     'We have your passenger list and will handle check-in. Boarding passes will arrive by email.',

@@ -251,8 +251,7 @@ const orderTrackingPage = {
 
   // Messages
   changesSaved: 'Breytingarnar þínar hafa verið vistaðar. Þú færð uppfærða staðfestingu.',
-  paymentSuccess:
-    'Greiðsla tókst! Pöntunin þín hefur verið uppfærð og þú færð uppfærða staðfestingu.',
+  paymentSuccess: 'Greiðsla tókst! Pöntunin þín hefur verið staðfest.',
   paymentError: 'Greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
 
   // Fast-Track
@@ -320,8 +319,8 @@ const orderTrackingPage = {
   charterMainPassenger: 'Aðalfarþegi',
   charterAddPassenger: '+ Bæta við farþega',
   charterRemovePassenger: 'Fjarlægja',
-  charterSubmit: 'Senda farþegalista',
-  charterSubmitting: 'Sendi...',
+  charterSubmit: 'Skrá farþega',
+  charterSubmitting: 'Skrái...',
   charterSuccessTitle: 'Takk fyrir!',
   charterSuccessText:
     'Við höfum móttekið farþegalistann og sjáum um innritunina. Þið fáið brottfararspjöldin í tölvupósti.',
