@@ -59,6 +59,7 @@ export const validateStore = (location: string, booking: Booking): boolean => {
       return (
         checkFlightAirlineInformation(booking.flightInformation) &&
         checkFlightArrivalAirportInformation(booking.flightInformation) &&
+        checkSelectedFlightAndDepartureDate(booking.flightInformation) &&
         checkBaggageInformation(booking.baggageInformation)
       )
 
@@ -127,6 +128,24 @@ const checkBaggageInformation = (
     baggageInformation.baggage.amount !== 0 ||
     baggageInformation.baggage.oddSizeAmount !== 0
   )
+}
+
+// Returns true when the booking has a real, future flight selected.
+// Required by /book/pick-up — without selectedFlight we can't even render
+// the slot picker (it gates on selectedFlight.ScheduledDateTime), and
+// without a future departureDate the slot click would write a past
+// pickupDate. Both get cleared on rehydrate (the store deliberately
+// drops them to avoid stale flight info bleeding across sessions), so
+// returning customers land on /book/pick-up unable to proceed unless
+// we redirect them back to /book to reselect.
+const checkSelectedFlightAndDepartureDate = (
+  flightInformation: FlightInformation,
+): boolean => {
+  if (!flightInformation.selectedFlight) return false
+  const dep = flightInformation.departureDate
+  if (!(dep instanceof Date) || isNaN(dep.getTime())) return false
+  const todayMs = new Date().setHours(0, 0, 0, 0)
+  return dep.getTime() > todayMs
 }
 
 // eslint-disable-next-line no-unused-vars
