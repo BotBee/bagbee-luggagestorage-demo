@@ -214,6 +214,15 @@ export default function PlaceAutocompleteInput({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setInputValue(val)
+    // Also propagate the typed text to the store so customers who
+    // proceed without clicking a Google autocomplete suggestion (slow
+    // suggestions, fast typing, paste, mobile) still have their address
+    // saved. If they later pick a suggestion, handleSelect overwrites
+    // with the canonical formatted address + postal code. Postcode
+    // stays '' when typed-only — the booking flow falls back to
+    // capacity-only slot gating in that case (no postal-code rules
+    // applied), matching the legacy unknown-postcode behaviour.
+    onPlaceSelectRef.current(val, val, '')
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => fetchSuggestions(val), 250)
   }
