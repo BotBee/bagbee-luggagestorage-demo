@@ -100,21 +100,23 @@ const PickUp = () => {
   const updateComments = useBookingStore((state) => state.updateComments)
   const methods = useForm<Customer>({})
   const { handleSubmit } = methods
-  // Truthy when pickupDate is a real future date — refuses today, the 1970
-  // rehydrate sentinel, and any other invalid value. Customer 2026-04-30
-  // submitted with pickupDate stamped as today because the previous
-  // disabled-check only verified pickupSlot, not pickupDate.
-  const todayMidnightMs = new Date().setHours(0, 0, 0, 0)
-  const pickupDateIsFuture =
-    bookingState.pickupInformation.pickupDate instanceof Date &&
-    !isNaN(bookingState.pickupInformation.pickupDate.getTime()) &&
-    bookingState.pickupInformation.pickupDate.getTime() > todayMidnightMs
+  // Note: the previous version had a `pickupDateIsFuture` check in both the
+  // submit gate AND the disabled-button condition. It was added in late
+  // April when pickupSlot could persist while pickupDate was cleared on
+  // rehydrate, leaving customers in a state where the slot looked selected
+  // but pickupDate was the 1970 sentinel. Today's earlier fix also clears
+  // pickupSlot on rehydrate, so the two fields are now guaranteed to be
+  // set together (the slot click handler sets both atomically). The
+  // future-date defensive belt was firing intermittently and blocking
+  // valid bookings — customers ended up with the disabled-state visual
+  // even though the click had set both fields correctly. Server-side
+  // /api/airtable/create still rejects past/today dates as the
+  // deterministic backstop.
 
   const onSubmit = async () => {
     if (
       !bookingState.pickupInformation.pickupLocation ||
-      !bookingState.pickupInformation.pickupSlot ||
-      !pickupDateIsFuture
+      !bookingState.pickupInformation.pickupSlot
     )
       return
     trackAddShippingInfo(
@@ -180,8 +182,7 @@ const PickUp = () => {
               type='submit'
               disabled={
                 !bookingState.pickupInformation.pickupLocation ||
-                !bookingState.pickupInformation.pickupSlot ||
-                !pickupDateIsFuture
+                !bookingState.pickupInformation.pickupSlot
               }
               fullWidth
             >
