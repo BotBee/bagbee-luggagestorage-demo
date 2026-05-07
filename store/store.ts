@@ -336,6 +336,13 @@ export const useBookingStore = create<BookingState>()(
           pickupInformation: {
             ...state.booking?.pickupInformation,
             pickupDate: undefined,
+            // Also drop pickupSlot — it must be paired with a fresh
+            // pickupDate, which we don't persist. Two customers got stuck
+            // 2026-05-04 with a stale persisted slot showing as visually
+            // selected (orange border) while pickupDate was the rehydrate
+            // sentinel (1970), so the disabled-check refused to enable
+            // Next. Always force a fresh slot click per session.
+            pickupSlot: undefined,
           },
         },
         fastTrack: {
@@ -378,6 +385,11 @@ export const useBookingStore = create<BookingState>()(
               ...current.booking.pickupInformation,
               ...(persisted.booking.pickupInformation || {}),
               pickupDate: SENTINEL_UNSET_DATE,
+              // Force-clear any existing persisted pickupSlot from older
+              // localStorage snapshots — see partialize comment above. New
+              // partialize won't write it, but existing data has to be
+              // healed at read time too.
+              pickupSlot: '',
             },
             availableFlights: undefined,
           }
