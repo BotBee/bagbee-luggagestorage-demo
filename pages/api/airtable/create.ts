@@ -41,16 +41,21 @@ const validateOrderPayload = (item: AirtableOrder): string[] => {
   }
   const flightDate = parseYmd(item?.['Dagsetning flugs'] as unknown)
   const pickupDate = parseYmd(item?.['Dagsetning pick-up'] as unknown)
-  // `<= today` (not `<`) — the calendar's minDate already forces tomorrow
-  // or later, so an order arriving with today's date is always the
-  // dayjs(undefined) / merge-fallback bug, never a real booking.
-  // Customer 2026-04-30 had pickupDate stamped as today after the store's
-  // merge function reset it on rehydrate and the slot click never re-set it.
-  if (flightDate && flightDate.getTime() <= today.getTime()) {
-    problems.push('flight date is today or in the past — the calendar disallows this')
+  // `<` today (not `<=`) — same-day pickup is a legitimate scenario:
+  // customer books at 8am for an evening flight, gets picked up later
+  // today. The previous `<= today` rejection was added 2026-04-30 to
+  // catch the dayjs(undefined) → today bug, but it also rejected real
+  // bookings whose `dayBeforeDeparture` happened to be today (flight
+  // tomorrow, pick up today). Reproduced 2026-05-04 — customer with
+  // a May 8 flight tried to submit on May 7 and was blocked here.
+  // Past dates (sentinel 1970, etc.) are still rejected. The advisory
+  // validateBookingForOrder logger remains as the soft signal for any
+  // remaining dayjs(undefined) regressions.
+  if (flightDate && flightDate.getTime() < today.getTime()) {
+    problems.push('flight date is in the past')
   }
-  if (pickupDate && pickupDate.getTime() <= today.getTime()) {
-    problems.push('pickup date is today or in the past — the calendar disallows this')
+  if (pickupDate && pickupDate.getTime() < today.getTime()) {
+    problems.push('pickup date is in the past')
   }
   return problems
 }
