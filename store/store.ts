@@ -52,6 +52,12 @@ const reviveDates = (key: string, value: unknown): unknown => {
   return value
 }
 
+// Diagnostic: expose the live store on window so we can read in-memory state
+// from the browser console. localStorage only holds the partialized snapshot
+// (departureDate/selectedFlight/pickupDate/pickupSlot are stripped by design),
+// which makes it useless for debugging "why is the Next button disabled".
+// `window.__bagbeeStore.getState().booking` returns the real current state.
+// Safe to keep — read-only handle to a public client-side store; no secrets.
 export const useBookingStore = create<BookingState>()(
   persist(
     (set) => ({
@@ -414,3 +420,10 @@ export const useBookingStore = create<BookingState>()(
     },
   ),
 )
+
+
+// Browser-only: expose the store on window so we can `window.__bagbeeStore.
+// getState().booking` from the console. SSR-safe via the typeof guard.
+if (typeof window !== 'undefined') {
+  ;(window as any).__bagbeeStore = useBookingStore
+}
