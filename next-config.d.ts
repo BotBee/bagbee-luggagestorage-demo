@@ -21,4 +21,7 @@ export type ServerConfig = {
   azinQAirportApiPassword: string
   azinQAirportApiToken: string
   azinQAirportApiBaseUrl: string
+  paydayBaseUrl: string
+  paydayClientId: string
+  paydayClientSecret: string
 }

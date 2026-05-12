@@ -18,6 +18,9 @@ const serverRuntimeConfig = {
   azinQAirportApiPassword: process.env.AZINQAIRPORTAPI_PASSWORD,
   azinQAirportApiUsername: process.env.AZINQAIRPORTAPI_USERNAME,
   azinQAirportApiToken: process.env.AZINQAIRPORTAPI_TOKEN,
+  paydayBaseUrl: process.env.PAYDAY_BASE_URL,
+  paydayClientId: process.env.PAYDAY_CLIENT_ID,
+  paydayClientSecret: process.env.PAYDAY_CLIENT_SECRET,
 }
 
 /** @type {import('next').NextConfig} */
