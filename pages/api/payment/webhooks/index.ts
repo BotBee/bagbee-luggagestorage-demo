@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getFastTrackTable, getTable, minifyItems } from '../../../../utils/airtable'
 import { sign } from '../../../../common/rapyd-helper'
+import { maybeSendPaydayInvoiceForOrder } from '../../../../utils/paydayInvoice'
 import { Readable } from 'stream'
 
 export const config = {
@@ -99,6 +100,10 @@ const UpdatePaidStatus = async (
       Greitt: true,
       ...(paymentId ? { 'Rapyd Payment ID': paymentId } : {}),
     })
+    // Send Payday invoice if this order has a Kennitala (B2B). Idempotent
+    // via the "Payday Invoice Sent" flag — safe against the optimistic
+    // mark-paid race from /api/airtable/mark-paid-by-order-no.
+    await maybeSendPaydayInvoiceForOrder(table, record.id, record.fields)
   } else if (tableType === 'fast-track') {
     await table.update(record.id, {
       Greiddi: true,

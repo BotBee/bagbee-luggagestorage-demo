@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
+import { maybeSendPaydayInvoiceForOrder } from '../../../utils/paydayInvoice'
 
 /**
  * Optimistic "mark paid" called by /orders/[orderNo] when the customer
@@ -50,6 +51,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       Greitt: true,
       Greiðslustaða: 'Greitt',
     })
+    // Send Payday invoice if Kennitala filled. Idempotent — safe against
+    // the same flow racing /api/payment/webhooks (Rapyd's webhook).
+    await maybeSendPaydayInvoiceForOrder(table, record.id, record.fields)
     return res.status(200).json({ marked: true })
   } catch (error: any) {
     console.error('[api][airtable][mark-paid-by-order-no] error', error)
