@@ -17,6 +17,10 @@ export default async function handler(
     amount,
     timeWindow,
     address,
+    pickupDate,
+    deliveryAddress,
+    deliveryDate,
+    deliveryTimeWindow,
   } = req.query as Record<string, string>
 
   if (!orderNo || !/^[a-zA-Z0-9]+$/.test(orderNo)) {
@@ -56,6 +60,18 @@ export default async function handler(
       updateFields['Heimilisfang'] = address
       const shortAddr = address.split(',')[0]?.trim() || address
       updateFields['Short Address'] = shortAddr
+    }
+    if (pickupDate) {
+      updateFields['Dagsetning pick-up'] = pickupDate
+    }
+    if (deliveryAddress) {
+      updateFields['Delivery Address'] = deliveryAddress
+    }
+    if (deliveryDate) {
+      updateFields['Delivery date'] = deliveryDate
+    }
+    if (deliveryTimeWindow) {
+      updateFields['Delivery Time-window'] = deliveryTimeWindow
     }
 
     // Clear then re-set Update OC to ensure the automation triggers every time

@@ -59,6 +59,14 @@ export default async function handler(
         amount: String((originalAmount ?? 0) + surcharge),
         ...(changes.timeWindow ? { timeWindow: changes.timeWindow } : {}),
         ...(changes.address ? { address: changes.address } : {}),
+        ...(changes.pickupDate ? { pickupDate: changes.pickupDate } : {}),
+        ...(changes.deliveryAddress
+          ? { deliveryAddress: changes.deliveryAddress }
+          : {}),
+        ...(changes.deliveryDate ? { deliveryDate: changes.deliveryDate } : {}),
+        ...(changes.deliveryTimeWindow
+          ? { deliveryTimeWindow: changes.deliveryTimeWindow }
+          : {}),
       })
 
       const rapydPayload = {
@@ -103,6 +111,18 @@ export default async function handler(
       // Update Short Address with first part
       const shortAddr = changes.address.split(',')[0]?.trim() || changes.address
       updateFields['Short Address'] = shortAddr
+    }
+    if (changes.pickupDate) {
+      updateFields['Dagsetning pick-up'] = changes.pickupDate
+    }
+    if (changes.deliveryAddress) {
+      updateFields['Delivery Address'] = changes.deliveryAddress
+    }
+    if (changes.deliveryDate) {
+      updateFields['Delivery date'] = changes.deliveryDate
+    }
+    if (changes.deliveryTimeWindow) {
+      updateFields['Delivery Time-window'] = changes.deliveryTimeWindow
     }
 
     // Clear then re-set Update OC to ensure the automation triggers every time

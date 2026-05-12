@@ -673,6 +673,41 @@ interface OrderPageProps {
 
 const ALL_STATUSES: OrderStatus[] = ['Pending', 'Confirmed', 'Planned', 'In Progress', 'Delivered']
 
+// P&D edit-form time slider. Spans 04:00 – 22:00 (18h) to cover early
+// cruise-terminal pickups and late evening windows. minWindow=1 enforces
+// the customer-facing rule: no tighter than a 1-hour window.
+const PD_SLIDER_START = 4
+const PD_SLIDER_END = 22
+const PD_SLIDER_CONSTRAINTS = {
+  minLeft: 0,
+  maxLeft: 17,
+  minRight: 1,
+  maxRight: 18,
+  rightLocked: false,
+  minWindow: 1,
+} as const
+
+// Parse "HH:MM - HH:MM" (and minor variants) into slider offsets from
+// PD_SLIDER_START, clamped to the slider range with a min 1-hour window.
+// Floors the start and ceils the end so that sub-hour windows like
+// "08:30 - 09:00" widen to "08:00 - 09:00" rather than collapsing.
+function parsePdWindowToOffsets(s: string): { left: number; right: number } {
+  const m = String(s || '').match(/(\d{1,2}):(\d{2})\s*-?\s*(\d{1,2}):(\d{2})/)
+  if (!m) return { left: 5, right: 9 } // default 09:00 - 13:00
+  const startH = parseInt(m[1], 10) + parseInt(m[2], 10) / 60
+  const endH = parseInt(m[3], 10) + parseInt(m[4], 10) / 60
+  let left = Math.floor(startH) - PD_SLIDER_START
+  let right = Math.ceil(endH) - PD_SLIDER_START
+  left = Math.max(0, Math.min(PD_SLIDER_CONSTRAINTS.maxLeft, left))
+  right = Math.max(left + PD_SLIDER_CONSTRAINTS.minWindow,
+                   Math.min(PD_SLIDER_CONSTRAINTS.maxRight, right))
+  return { left, right }
+}
+
+function formatPdWindowFromOffsets(left: number, right: number): string {
+  return `${formatHour(PD_SLIDER_START + left)} - ${formatHour(PD_SLIDER_START + right)}`
+}
+
 function formatHour(hour: number): string {
   const h = Math.floor(hour)
   const m = Math.round((hour - h) * 60)
@@ -790,6 +825,16 @@ const OrderPage = ({
   // Address edit state
   const [editAddress, setEditAddress] = useState<string>('')
 
+  // P&D-only edit state
+  const [editPickupDate, setEditPickupDate] = useState<string>('')
+  const [editDeliveryAddress, setEditDeliveryAddress] = useState<string>('')
+  const [editDeliveryDate, setEditDeliveryDate] = useState<string>('')
+  // P&D time-window slider state (offsets in hours from PD_SLIDER_START=4)
+  const [editPickupLeft, setEditPickupLeft] = useState<number>(5)
+  const [editPickupRight, setEditPickupRight] = useState<number>(9)
+  const [editDeliveryLeft, setEditDeliveryLeft] = useState<number>(5)
+  const [editDeliveryRight, setEditDeliveryRight] = useState<number>(9)
+
   // Google Places autocomplete for address
   const { ref: addressRef } = usePlacesWidget<ReactGoogleAutocompleteProps>({
     apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -860,24 +905,38 @@ const OrderPage = ({
   const statusColor = STATUS_COLORS[status] || '#A3A4A7'
 
   const isArrival = fields['Annað (comment)']?.includes('[ARRIVAL SERVICE]') || false
-  const serviceType = isArrival ? t.arrivalService : t.departureService
+  const requestedServiceRaw = fields['Requested service']
+  const requestedService =
+    typeof requestedServiceRaw === 'string'
+      ? requestedServiceRaw
+      : requestedServiceRaw?.name || ''
+  const isPickupDelivery = requestedService === 'Pickup & Delivery'
+  const serviceType = isPickupDelivery
+    ? t.pickupDeliveryService
+    : isArrival
+      ? t.arrivalService
+      : t.departureService
   const isDelivered = status === 'Delivered'
   const isConfirmed = status === 'Confirmed'
   const isPlanned = status === 'Planned'
-  const showMap = isDelivered || isPlanned
+  const isBeforePickup = status === 'Pending' || status === 'Confirmed' || status === 'Planned'
 
   const deliveryAddress = fields['Delivery Address'] || ''
   const pickupAddress = fields['Heimilisfang'] || ''
   const hotelName = fields['Hótel Nafn'] || ''
 
-  // Planned = show pickup address (Heimilisfang), Delivered = show delivery address
-  const mapAddress = isPlanned
+  // P&D: always show map; toggle pickup vs delivery at the moment of pickup
+  // Other services: existing behaviour (Planned = pickup, Delivered = delivery)
+  const showMap = isPickupDelivery ? true : (isDelivered || isPlanned)
+  const showPickupOnMap = isPickupDelivery ? isBeforePickup : isPlanned
+
+  const mapAddress = showPickupOnMap
     ? pickupAddress
     : deliveryAddress || pickupAddress
-  const displayMapAddress = isPlanned
+  const displayMapAddress = showPickupOnMap
     ? (hotelName ? `${hotelName}, ${pickupAddress}` : pickupAddress)
     : (deliveryAddress || (hotelName ? `${hotelName}, ${pickupAddress}` : pickupAddress))
-  const mapHeading = isPlanned ? t.pickupLocationTitle : t.deliveryLocationTitle
+  const mapHeading = showPickupOnMap ? t.pickupLocationTitle : t.deliveryLocationTitle
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   const encodedAddress = encodeURIComponent(displayMapAddress || 'Keflavik Airport, Iceland')
@@ -903,12 +962,40 @@ const OrderPage = ({
 
   const originalAddress = fields['Heimilisfang'] || ''
 
+  // Self-service cancellation is only allowed up to 24h before the pickup
+  // window starts. Server-side enforcement lives in /api/order/cancel — this
+  // flag drives the UI so we don't even surface the link inside the window.
+  // Fail open when the date is missing (e.g. older orders): allow cancel.
+  const cancelHoursUntilPickup = (() => {
+    const pickupDateStr = String(fields['Dagsetning pick-up'] || '').trim()
+    if (!pickupDateStr) return Infinity
+    const m = String(fields['Tímasetning'] || '').match(/^(\d{1,2}):(\d{2})/)
+    const hh = m ? m[1].padStart(2, '0') : '00'
+    const mm = m ? m[2] : '00'
+    const pickupAt = new Date(`${pickupDateStr}T${hh}:${mm}:00Z`)
+    const hours = (pickupAt.getTime() - Date.now()) / 3_600_000
+    return isNaN(hours) ? Infinity : hours
+  })()
+  const canCancel = cancelHoursUntilPickup >= 24
+
   const startEditing = () => {
     setEditBags(originalBags || 1)
     setEditOddSize(originalOddSize)
     setEditTimeWindow(originalTimeWindow)
     setEditAddress(originalAddress)
     setEditSubmitted(false)
+
+    if (isPickupDelivery) {
+      setEditPickupDate(String(fields['Dagsetning pick-up'] || ''))
+      setEditDeliveryAddress(String(fields['Delivery Address'] || ''))
+      setEditDeliveryDate(String(fields['Delivery date'] || ''))
+      const pu = parsePdWindowToOffsets(originalTimeWindow)
+      setEditPickupLeft(pu.left)
+      setEditPickupRight(pu.right)
+      const dv = parsePdWindowToOffsets(String(fields['Delivery Time-window'] || ''))
+      setEditDeliveryLeft(dv.left)
+      setEditDeliveryRight(dv.right)
+    }
 
     // Pre-set the time slider to current selection
     const parsed = parseTimeWindow(originalTimeWindow)
@@ -944,6 +1031,19 @@ const OrderPage = ({
   const submitUpdate = async () => {
     setSubmitting(true)
     try {
+      // P&D uses its own time-range slider per leg; non-P&D uses the
+      // morning/evening slider that writes into editTimeWindow.
+      const pickupTimeWindowToSend = isPickupDelivery
+        ? formatPdWindowFromOffsets(editPickupLeft, editPickupRight)
+        : editTimeWindow
+      const deliveryTimeWindowToSend = isPickupDelivery
+        ? formatPdWindowFromOffsets(editDeliveryLeft, editDeliveryRight)
+        : ''
+      const originalDeliveryAddress = String(fields['Delivery Address'] || '')
+      const originalPickupDate = String(fields['Dagsetning pick-up'] || '')
+      const originalDeliveryDate = String(fields['Delivery date'] || '')
+      const originalDeliveryTimeWindow = String(fields['Delivery Time-window'] || '')
+
       const response = await fetch('/api/order/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -955,11 +1055,29 @@ const OrderPage = ({
           changes: {
             bags: editBags,
             oddSize: editOddSize,
-            timeWindow: editTimeWindow || undefined,
+            timeWindow: pickupTimeWindowToSend || undefined,
             address:
               editAddress && editAddress !== originalAddress
                 ? editAddress
                 : undefined,
+            ...(isPickupDelivery && editPickupDate && editPickupDate !== originalPickupDate
+              ? { pickupDate: editPickupDate }
+              : {}),
+            ...(isPickupDelivery &&
+            editDeliveryAddress &&
+            editDeliveryAddress !== originalDeliveryAddress
+              ? { deliveryAddress: editDeliveryAddress }
+              : {}),
+            ...(isPickupDelivery &&
+            editDeliveryDate &&
+            editDeliveryDate !== originalDeliveryDate
+              ? { deliveryDate: editDeliveryDate }
+              : {}),
+            ...(isPickupDelivery &&
+            deliveryTimeWindowToSend &&
+            deliveryTimeWindowToSend !== originalDeliveryTimeWindow
+              ? { deliveryTimeWindow: deliveryTimeWindowToSend }
+              : {}),
             originalAddress,
             originalTimeWindow,
           },
@@ -1080,7 +1198,10 @@ const OrderPage = ({
       } else {
         setCancelResult({
           success: false,
-          message: data.message || t.cancelOrder.error,
+          message:
+            data.message === 'tooLate'
+              ? t.cancelOrder.tooLate
+              : data.message || t.cancelOrder.error,
         })
       }
     } catch {
@@ -1247,90 +1368,252 @@ const OrderPage = ({
         })()}
 
         {/* Order Details */}
-        <Section>
-          <SectionTitle>{t.orderDetailsTitle}</SectionTitle>
-          <StatusCard>
-            <StatusCardHeader>
-              <StatusBadge bgColor={statusColor}>
-                {t.status[status as OrderStatus] || status}
-              </StatusBadge>
-              {isConfirmed && !isEditing && !editSubmitted && (
-                <EditOrderLink onClick={startEditing}>
-                  <span>&#9998;</span> {t.editOrder}
-                </EditOrderLink>
-              )}
-            </StatusCardHeader>
-            <DetailGrid>
-              <DetailRow>
-                <DetailLabel>{t.customer}</DetailLabel>
-                <DetailValue>{fields['Nafn viðskiptavinar'] || 'N/A'}</DetailValue>
-              </DetailRow>
-              {fields['Short Address'] && (
-                <DetailRow>
-                  <DetailLabel>{t.address}</DetailLabel>
-                  <DetailValue>{fields['Short Address']}</DetailValue>
-                </DetailRow>
-              )}
-              <DetailRow>
-                <DetailLabel>{t.phone}</DetailLabel>
-                <DetailValue>
-                  {fields['Símanúmer']
-                    ? formatPhoneForDisplay(fields['Símanúmer'])
-                    : 'N/A'}
-                </DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.pickupDate}</DetailLabel>
-                <DetailValue>{formatDate(fields['Dagsetning pick-up'])}</DetailValue>
-              </DetailRow>
-              {fields['Tímasetning'] && (
-                <DetailRow>
-                  <DetailLabel>{isArrival ? t.deliveryWindow : t.pickupWindow}</DetailLabel>
-                  <DetailValue>{fields['Tímasetning']}</DetailValue>
-                </DetailRow>
-              )}
-              <DetailRow>
-                <DetailLabel>{t.bags}</DetailLabel>
-                <DetailValue>
-                  {fields['Töskufjöldi_no'] || 0} {t.standardSuffix}
-                  {fields['Töskufjöldi_no_yfirstærð'] > 0 &&
-                    ` + ${fields['Töskufjöldi_no_yfirstærð']} ${t.oddSizeSuffix}`}
-                </DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.flightDate}</DetailLabel>
-                <DetailValue>{formatDate(fields['Dagsetning flugs'])}</DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.airline}</DetailLabel>
-                <DetailValue>{fields['Flugfélag'] || 'N/A'}</DetailValue>
-              </DetailRow>
-              <DetailRow>
-                <DetailLabel>{t.flight}</DetailLabel>
-                <DetailValue>{fields['Flugnúmer'] || 'N/A'}</DetailValue>
-              </DetailRow>
-            </DetailGrid>
+        {isPickupDelivery ? (
+          <>
+            {/* Client information */}
+            <Section style={{ marginBottom: 12 }}>
+              <SectionTitle>{t.clientInfoTitle}</SectionTitle>
+              <StatusCard>
+                <StatusCardHeader>
+                  <StatusBadge bgColor={statusColor}>
+                    {t.status[status as OrderStatus] || status}
+                  </StatusBadge>
+                  {isConfirmed && !isEditing && !editSubmitted && (
+                    <EditOrderLink onClick={startEditing}>
+                      <span>&#9998;</span> {t.editOrder}
+                    </EditOrderLink>
+                  )}
+                </StatusCardHeader>
+                <DetailGrid>
+                  <DetailRow>
+                    <DetailLabel>{t.customer}</DetailLabel>
+                    <DetailValue>{fields['Nafn viðskiptavinar'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.email}</DetailLabel>
+                    <DetailValue>{fields['Tölvupóstfang'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.phone}</DetailLabel>
+                    <DetailValue>
+                      {fields['Símanúmer']
+                        ? formatPhoneForDisplay(fields['Símanúmer'])
+                        : 'N/A'}
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.bags}</DetailLabel>
+                    <DetailValue>
+                      {fields['Töskufjöldi_no'] || 0} {t.standardSuffix}
+                      {fields['Töskufjöldi_no_yfirstærð'] > 0 &&
+                        ` + ${fields['Töskufjöldi_no_yfirstærð']} ${t.oddSizeSuffix}`}
+                    </DetailValue>
+                  </DetailRow>
+                </DetailGrid>
 
-            {/* Cancel order — subdued link; only shown when cancellation is
-                still actionable (not In progress / Delivered / Cancelled). */}
-            {!isEditing &&
-              !editSubmitted &&
-              !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
-                status as string,
-              ) && (
-                <CancelOrderRow>
-                  <CancelOrderLink
-                    onClick={() => {
-                      setCancelResult(null)
-                      setShowCancelModal(true)
+                {!isEditing &&
+                  !editSubmitted &&
+                  !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                    status as string,
+                  ) &&
+                  canCancel && (
+                    <CancelOrderRow>
+                      <CancelOrderLink
+                        onClick={() => {
+                          setCancelResult(null)
+                          setShowCancelModal(true)
+                        }}
+                      >
+                        {t.cancelOrder.linkText}
+                      </CancelOrderLink>
+                    </CancelOrderRow>
+                  )}
+                {!isEditing &&
+                  !editSubmitted &&
+                  !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                    status as string,
+                  ) &&
+                  !canCancel && (
+                    <p
+                      style={{
+                        fontFamily: 'Poppins, sans-serif',
+                        fontSize: 12,
+                        color: '#a3a4a7',
+                        textAlign: 'center',
+                        marginTop: 16,
+                        marginBottom: 0,
+                      }}
+                    >
+                      {t.cancelOrder.tooLate}
+                    </p>
+                  )}
+              </StatusCard>
+            </Section>
+
+            {/* Pickup information — heading inside the card for a tighter feel */}
+            <Section style={{ marginBottom: 12 }}>
+              <StatusCard>
+                <h3 style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#000929',
+                  margin: '0 0 16px',
+                }}>
+                  {t.pickupInfoTitle}
+                </h3>
+                <DetailGrid>
+                  <DetailRow>
+                    <DetailLabel>{t.pickupAddress}</DetailLabel>
+                    <DetailValue>{fields['Heimilisfang'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.pickupDate}</DetailLabel>
+                    <DetailValue>{formatDate(fields['Dagsetning pick-up'])}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.pickupWindow}</DetailLabel>
+                    <DetailValue>{fields['Tímasetning'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                </DetailGrid>
+              </StatusCard>
+            </Section>
+
+            {/* Delivery information — heading inside the card */}
+            <Section>
+              <StatusCard>
+                <h3 style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#000929',
+                  margin: '0 0 16px',
+                }}>
+                  {t.deliveryInfoTitle}
+                </h3>
+                <DetailGrid>
+                  <DetailRow>
+                    <DetailLabel>{t.deliveryAddress}</DetailLabel>
+                    <DetailValue>{fields['Delivery Address'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.deliveryDate}</DetailLabel>
+                    <DetailValue>{formatDate(fields['Delivery date'])}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>{t.deliveryWindow}</DetailLabel>
+                    <DetailValue>{fields['Delivery Time-window'] || 'N/A'}</DetailValue>
+                  </DetailRow>
+                </DetailGrid>
+              </StatusCard>
+            </Section>
+          </>
+        ) : (
+          <Section>
+            <SectionTitle>{t.orderDetailsTitle}</SectionTitle>
+            <StatusCard>
+              <StatusCardHeader>
+                <StatusBadge bgColor={statusColor}>
+                  {t.status[status as OrderStatus] || status}
+                </StatusBadge>
+                {isConfirmed && !isEditing && !editSubmitted && (
+                  <EditOrderLink onClick={startEditing}>
+                    <span>&#9998;</span> {t.editOrder}
+                  </EditOrderLink>
+                )}
+              </StatusCardHeader>
+              <DetailGrid>
+                <DetailRow>
+                  <DetailLabel>{t.customer}</DetailLabel>
+                  <DetailValue>{fields['Nafn viðskiptavinar'] || 'N/A'}</DetailValue>
+                </DetailRow>
+                {fields['Short Address'] && (
+                  <DetailRow>
+                    <DetailLabel>{t.address}</DetailLabel>
+                    <DetailValue>{fields['Short Address']}</DetailValue>
+                  </DetailRow>
+                )}
+                <DetailRow>
+                  <DetailLabel>{t.phone}</DetailLabel>
+                  <DetailValue>
+                    {fields['Símanúmer']
+                      ? formatPhoneForDisplay(fields['Símanúmer'])
+                      : 'N/A'}
+                  </DetailValue>
+                </DetailRow>
+                <DetailRow>
+                  <DetailLabel>{t.pickupDate}</DetailLabel>
+                  <DetailValue>{formatDate(fields['Dagsetning pick-up'])}</DetailValue>
+                </DetailRow>
+                {fields['Tímasetning'] && (
+                  <DetailRow>
+                    <DetailLabel>{isArrival ? t.deliveryWindow : t.pickupWindow}</DetailLabel>
+                    <DetailValue>{fields['Tímasetning']}</DetailValue>
+                  </DetailRow>
+                )}
+                <DetailRow>
+                  <DetailLabel>{t.bags}</DetailLabel>
+                  <DetailValue>
+                    {fields['Töskufjöldi_no'] || 0} {t.standardSuffix}
+                    {fields['Töskufjöldi_no_yfirstærð'] > 0 &&
+                      ` + ${fields['Töskufjöldi_no_yfirstærð']} ${t.oddSizeSuffix}`}
+                  </DetailValue>
+                </DetailRow>
+                <DetailRow>
+                  <DetailLabel>{t.flightDate}</DetailLabel>
+                  <DetailValue>{formatDate(fields['Dagsetning flugs'])}</DetailValue>
+                </DetailRow>
+                <DetailRow>
+                  <DetailLabel>{t.airline}</DetailLabel>
+                  <DetailValue>{fields['Flugfélag'] || 'N/A'}</DetailValue>
+                </DetailRow>
+                <DetailRow>
+                  <DetailLabel>{t.flight}</DetailLabel>
+                  <DetailValue>{fields['Flugnúmer'] || 'N/A'}</DetailValue>
+                </DetailRow>
+              </DetailGrid>
+
+              {/* Cancel order — subdued link; only shown when cancellation is
+                  still actionable (not In progress / Delivered / Cancelled). */}
+              {!isEditing &&
+                !editSubmitted &&
+                !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                  status as string,
+                ) &&
+                canCancel && (
+                  <CancelOrderRow>
+                    <CancelOrderLink
+                      onClick={() => {
+                        setCancelResult(null)
+                        setShowCancelModal(true)
+                      }}
+                    >
+                      {t.cancelOrder.linkText}
+                    </CancelOrderLink>
+                  </CancelOrderRow>
+                )}
+              {!isEditing &&
+                !editSubmitted &&
+                !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                  status as string,
+                ) &&
+                !canCancel && (
+                  <p
+                    style={{
+                      fontFamily: 'Poppins, sans-serif',
+                      fontSize: 12,
+                      color: '#a3a4a7',
+                      textAlign: 'center',
+                      marginTop: 16,
+                      marginBottom: 0,
                     }}
                   >
-                    {t.cancelOrder.linkText}
-                  </CancelOrderLink>
-                </CancelOrderRow>
-              )}
-          </StatusCard>
-        </Section>
+                    {t.cancelOrder.tooLate}
+                  </p>
+                )}
+            </StatusCard>
+          </Section>
+        )}
 
         {/* Fast-Track — collapsed promo OR expanded form, in the same slot
             so opening the form replaces the card in place (not below the bag photos) */}
@@ -1339,7 +1622,7 @@ const OrderPage = ({
             submitted. Previously `!editSubmitted` was in the gate, which
             silently removed Fast-Track for the rest of the order's life
             once the customer had ever updated bag count / time window. */}
-        {!isEditing && !showFastTrack && (
+        {!isEditing && !showFastTrack && !isPickupDelivery && (
           <ActionGrid>
             <ActionCard variant='primary'>
               <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
@@ -1351,7 +1634,7 @@ const OrderPage = ({
             </ActionCard>
           </ActionGrid>
         )}
-        {!isEditing && showFastTrack && (
+        {!isEditing && showFastTrack && !isPickupDelivery && (
           <Section>
             <EditSection>
               <EditTitle>{t.fastTrackSectionTitle}</EditTitle>
@@ -1549,8 +1832,150 @@ const OrderPage = ({
           </Section>
         )}
 
-        {/* Edit Mode */}
-        {isConfirmed && isEditing && (
+        {/* P&D edit form — simpler form with pickup AND delivery side */}
+        {isConfirmed && isEditing && isPickupDelivery && (
+          <EditSection>
+            <EditTitle>{t.updateYourOrder}</EditTitle>
+
+            <h4 style={{ fontFamily: 'Poppins', fontSize: 14, fontWeight: 600, margin: '0 0 12px', color: '#000929' }}>
+              {t.editPickupSection}
+            </h4>
+
+            <div style={{ marginBottom: 12 }}>
+              <TimeWindowLabel>{t.pickupAddressLabel}</TimeWindowLabel>
+              <input
+                type='text'
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 16px', fontSize: 14,
+                  fontFamily: 'Poppins, sans-serif',
+                  border: '1px solid #e5e6eb', borderRadius: 12,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <TimeWindowLabel>{t.pickupDateLabel}</TimeWindowLabel>
+              <input
+                type='date'
+                value={editPickupDate}
+                onChange={(e) => setEditPickupDate(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 16px', fontSize: 14,
+                  fontFamily: 'Poppins, sans-serif',
+                  border: '1px solid #e5e6eb', borderRadius: 12,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <TimeWindowLabel>{t.pickupTimeWindowLabel}</TimeWindowLabel>
+            <TimeRangeSlider
+              startHour={PD_SLIDER_START}
+              endHour={PD_SLIDER_END}
+              leftValue={editPickupLeft}
+              rightValue={editPickupRight}
+              constraints={PD_SLIDER_CONSTRAINTS}
+              onChange={(l, r) => { setEditPickupLeft(l); setEditPickupRight(r) }}
+            />
+
+            <h4 style={{ fontFamily: 'Poppins', fontSize: 14, fontWeight: 600, margin: '16px 0 12px', color: '#000929' }}>
+              {t.editDeliverySection}
+            </h4>
+
+            <div style={{ marginBottom: 12 }}>
+              <TimeWindowLabel>{t.deliveryAddressLabel}</TimeWindowLabel>
+              <input
+                type='text'
+                value={editDeliveryAddress}
+                onChange={(e) => setEditDeliveryAddress(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 16px', fontSize: 14,
+                  fontFamily: 'Poppins, sans-serif',
+                  border: '1px solid #e5e6eb', borderRadius: 12,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <TimeWindowLabel>{t.deliveryDateLabel}</TimeWindowLabel>
+              <input
+                type='date'
+                value={editDeliveryDate}
+                onChange={(e) => setEditDeliveryDate(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 16px', fontSize: 14,
+                  fontFamily: 'Poppins, sans-serif',
+                  border: '1px solid #e5e6eb', borderRadius: 12,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <TimeWindowLabel>{t.deliveryTimeWindowLabel}</TimeWindowLabel>
+            <TimeRangeSlider
+              startHour={PD_SLIDER_START}
+              endHour={PD_SLIDER_END}
+              leftValue={editDeliveryLeft}
+              rightValue={editDeliveryRight}
+              constraints={PD_SLIDER_CONSTRAINTS}
+              onChange={(l, r) => { setEditDeliveryLeft(l); setEditDeliveryRight(r) }}
+            />
+
+            <EditRow>
+              <EditLabel>{t.standardBags}</EditLabel>
+              <Counter>
+                <CounterButton disabled={editBags <= 0} onClick={() => setEditBags(Math.max(0, editBags - 1))}>-</CounterButton>
+                <CounterValue>{editBags}</CounterValue>
+                <CounterButton onClick={() => setEditBags(editBags + 1)}>+</CounterButton>
+              </Counter>
+            </EditRow>
+
+            <EditRow>
+              <EditLabel>{t.oddSizeBags}</EditLabel>
+              <Counter>
+                <CounterButton disabled={editOddSize <= 0} onClick={() => setEditOddSize(Math.max(0, editOddSize - 1))}>-</CounterButton>
+                <CounterValue>{editOddSize}</CounterValue>
+                <CounterButton onClick={() => setEditOddSize(editOddSize + 1)}>+</CounterButton>
+              </Counter>
+            </EditRow>
+
+            {surcharge > 0 && (
+              <div style={{
+                background: '#fff8ee', border: '1px solid #f3ad3c', borderRadius: 12,
+                padding: 16, marginTop: 16, textAlign: 'center',
+              }}>
+                <p style={{ fontFamily: 'Poppins', fontSize: 14, color: '#000929', margin: 0 }}>
+                  {t.surcharge} <strong>{surcharge.toLocaleString()} kr</strong>
+                </p>
+                <p style={{ fontFamily: 'Poppins', fontSize: 12, color: '#696f79', margin: '4px 0 0' }}>
+                  {extraBags > 0 && `${extraBags} ${extraBags === 1 ? t.extraBag : t.extraBags} (${extraBags * 1990} kr)`}
+                  {extraBags > 0 && extraOddSize > 0 && ' + '}
+                  {extraOddSize > 0 && `${extraOddSize} ${t.extraOddSize} (${extraOddSize * 2490} kr)`}
+                </p>
+              </div>
+            )}
+
+            <SubmitButton onClick={submitUpdate} disabled={submitting || (editBags + editOddSize === 0)}>
+              {submitting
+                ? t.processing
+                : surcharge > 0
+                  ? t.payAndUpdate.replace('{amount}', surcharge.toLocaleString())
+                  : t.saveChanges}
+            </SubmitButton>
+            {!hasBagChanges && (
+              <p style={{ fontFamily: 'Poppins', fontSize: 12, color: '#3D7165', marginTop: 8, textAlign: 'center' }}>
+                {t.freeTimeWindow}
+              </p>
+            )}
+          </EditSection>
+        )}
+
+        {/* Edit Mode (non-P&D) */}
+        {isConfirmed && isEditing && !isPickupDelivery && (
           <EditSection>
             <EditTitle>{t.updateYourOrder}</EditTitle>
 

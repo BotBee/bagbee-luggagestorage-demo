@@ -180,6 +180,7 @@ const orderTrackingPage = {
   // Service types
   departureService: 'Innritunarþjónusta',
   arrivalService: 'Komuþjónusta',
+  pickupDeliveryService: 'Sókn og afhending',
 
   // Status names
   status: {
@@ -197,8 +198,11 @@ const orderTrackingPage = {
 
   // Sections
   orderDetailsTitle: 'Pöntunarupplýsingar',
+  clientInfoTitle: 'Upplýsingar viðskiptavinar',
+  pickupInfoTitle: 'Sækjum',
+  deliveryInfoTitle: 'Afhendum',
   estimatedPickupTitle: 'Áætluð tímasetning',
-  pickupLocationTitle: 'Sóknarstaður',
+  pickupLocationTitle: 'Heimilisfang',
   deliveryLocationTitle: 'Afhendingarstaður',
   yourBagsTitle: 'Töskurnar þínar',
 
@@ -211,9 +215,13 @@ const orderTrackingPage = {
   bags: 'Töskur',
   pickupWindow: 'Tímasetning',
   deliveryWindow: 'Afhendingartími',
+  deliveryDate: 'Dagsetning afhendingar',
   customer: 'Viðskiptavinur',
   phone: 'Sími',
+  email: 'Tölvupóstur',
   address: 'Heimilisfang',
+  pickupAddress: 'Heimilisfang',
+  deliveryAddress: 'Afhendingarstaður',
   addressLabel: 'Sóknarstaður',
   standardSuffix: 'venjulegar',
   oddSizeSuffix: 'yfirstærð',
@@ -294,8 +302,21 @@ const orderTrackingPage = {
       'Pöntuninni hefur verið hætt við. Engin greiðsla var skráð, svo engin endurgreiðsla þarf að fara fram.',
     error:
       'Ekki tókst að hætta við pöntun. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+    tooLate:
+      'Eingöngu er hægt að hætta við á netinu allt að 24 klukkustundum fyrir sókn. Vinsamlegast hafðu samband við BagBee.',
     close: 'Loka',
   },
+
+  // P&D edit form
+  editPickupSection: 'Sókn',
+  editDeliverySection: 'Afhending',
+  pickupAddressLabel: 'Sóknarstaður',
+  deliveryAddressLabel: 'Afhendingarstaður',
+  pickupDateLabel: 'Dagsetning sóknar',
+  deliveryDateLabel: 'Dagsetning afhendingar',
+  pickupTimeWindowLabel: 'Sóknartími',
+  deliveryTimeWindowLabel: 'Afhendingartími',
+  timeWindowPlaceholder: 't.d. 09:00 - 11:00',
 
   // Tip (English-only feature, but keys mirrored here so TS type is consistent)
   tipTitle: '',

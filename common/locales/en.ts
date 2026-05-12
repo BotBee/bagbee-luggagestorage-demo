@@ -178,6 +178,7 @@ const orderTrackingPage = {
   // Service types
   departureService: 'Departure Service',
   arrivalService: 'Arrival Service',
+  pickupDeliveryService: 'Pickup & Delivery',
 
   // Status names
   status: {
@@ -194,6 +195,9 @@ const orderTrackingPage = {
 
   // Sections
   orderDetailsTitle: 'Order Details',
+  clientInfoTitle: 'Client Information',
+  pickupInfoTitle: 'Pickup',
+  deliveryInfoTitle: 'Delivery',
   estimatedPickupTitle: 'Estimated Pickup Time',
   pickupLocationTitle: 'Pickup Location',
   deliveryLocationTitle: 'Delivery Location',
@@ -208,9 +212,13 @@ const orderTrackingPage = {
   bags: 'Bags',
   pickupWindow: 'Pickup Window',
   deliveryWindow: 'Delivery Window',
+  deliveryDate: 'Delivery Date',
   customer: 'Customer',
   phone: 'Phone',
+  email: 'Email',
   address: 'Address',
+  pickupAddress: 'Pickup Address',
+  deliveryAddress: 'Delivery Address',
   addressLabel: 'Pickup address',
   standardSuffix: 'standard',
   oddSizeSuffix: 'odd-size',
@@ -291,8 +299,21 @@ const orderTrackingPage = {
       'Your order has been cancelled. No payment was on file, so no refund is needed.',
     error:
       'We could not cancel the order. Please try again or contact BagBee directly.',
+    tooLate:
+      'Online cancellation is only available up to 24 hours before pickup. Please contact BagBee directly.',
     close: 'Close',
   },
+
+  // P&D edit form
+  editPickupSection: 'Pickup',
+  editDeliverySection: 'Delivery',
+  pickupAddressLabel: 'Pickup address',
+  deliveryAddressLabel: 'Delivery address',
+  pickupDateLabel: 'Pickup date',
+  deliveryDateLabel: 'Delivery date',
+  pickupTimeWindowLabel: 'Pickup time window',
+  deliveryTimeWindowLabel: 'Delivery time window',
+  timeWindowPlaceholder: 'e.g. 09:00 - 11:00',
 
   // Tip the driver (English-only feature, shown after Delivered)
   tipTitle: 'Happy with your delivery?',

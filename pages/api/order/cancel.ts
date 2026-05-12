@@ -123,6 +123,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
+    // Self-service cancellation is only allowed up to 24h before the pickup
+    // window starts. Inside that window the customer has to call/email BagBee —
+    // we still want the refund to be a human decision.
+    const pickupDateStr = String(record.fields['Dagsetning pick-up'] || '').trim()
+    const pickupWindowStr = String(record.fields['Tímasetning'] || '').trim()
+    if (pickupDateStr) {
+      const m = pickupWindowStr.match(/^(\d{1,2}):(\d{2})/)
+      const hh = m ? m[1].padStart(2, '0') : '00'
+      const mm = m ? m[2] : '00'
+      // Iceland is UTC year-round, so treating the local time as UTC is safe.
+      const pickupAt = new Date(`${pickupDateStr}T${hh}:${mm}:00Z`)
+      const hoursUntil = (pickupAt.getTime() - Date.now()) / 3_600_000
+      if (!isNaN(hoursUntil) && hoursUntil < 24) {
+        return res.status(409).json({
+          message: 'tooLate',
+          hoursUntil,
+        })
+      }
+    }
+
     // Collect every payment ID. Prefer the new multiline list; fall back to
     // the legacy singular field for orders that paid before it existed.
     const multiline = String(record.fields['Rapyd Payment IDs'] || '').trim()
