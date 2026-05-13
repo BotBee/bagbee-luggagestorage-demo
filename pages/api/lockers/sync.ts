@@ -25,7 +25,7 @@ import {
   type BookingRecord,
   type LockerRecord,
 } from '../../../utils/kefLockersAirtable'
-import { shiftForEvent, type Shift } from '../../../utils/kefLockerShifts'
+import { shiftForEvent } from '../../../utils/kefLockerShifts'
 import {
   createTimeBoundPasscode,
   deletePasscode,

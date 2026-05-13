@@ -93,7 +93,7 @@ export interface BookingFields extends FieldSet {
   [FLD.bookings.keyboardPwdIdOut]?: string
   [FLD.bookings.dropoffOpenedAt]?: string
   [FLD.bookings.pickupOpenedAt]?: string
-  [FLD.bookings.syncStatus]?: string | { name: string }
+  [FLD.bookings.syncStatus]?: string
   [FLD.bookings.cancelled]?: boolean
   [FLD.bookings.bookingNumber]?: string
 }
