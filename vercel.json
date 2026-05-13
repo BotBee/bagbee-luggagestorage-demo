@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/lockers/sync",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
