@@ -111,10 +111,11 @@ export async function loadActiveBookings(): Promise<BookingRecord[]> {
   const records: BookingRecord[] = []
   await base<BookingFields>(KEF_BOOKINGS_TABLE)
     .select({
-      // We can't easily filter on fldIds in formulas via the airtable lib,
-      // so just pull everything not-completed and filter client-side. With
-      // ~hundreds of records this is fine.
+      // Only bookings using the new datetime schema. Legacy bookings (with
+      // empty Check-in datetime) are never touched by the integration —
+      // they belong to the pre-integration era and stay as-is.
       filterByFormula: `AND(
+        NOT({Check-in datetime} = ''),
         NOT({RemoteLock sync status} = 'Completed'),
         NOT({RemoteLock sync status} = 'Revoked')
       )`,

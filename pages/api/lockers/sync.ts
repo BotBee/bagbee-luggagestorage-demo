@@ -35,6 +35,12 @@ import {
 
 const PUSH_AHEAD_MS = 24 * 60 * 60 * 1000 // create PIN when shift is within next 24h
 
+// Allow up to 60s for the sync (Pro plan). Default is 10s which is too short
+// if we ever have a large backlog to revoke or many TTLock calls in one tick.
+export const config = {
+  maxDuration: 60,
+}
+
 interface SyncSummary {
   processed: number
   pinsCreated: number
@@ -139,11 +145,12 @@ async function processBooking(
   }
 
   // ---- Validate required fields --------------------------------------------
-  if (!checkInIso || !checkOutIso) {
-    throw new Error('Missing Check-in datetime or Check-out datetime')
-  }
+  // Missing datetimes = booking incomplete — skip silently (no Airtable write).
+  // Filter in loadActiveBookings should already exclude these, but defend
+  // anyway in case the filter changes or a partial booking slips through.
+  if (!checkInIso || !checkOutIso) return
   if (!lockerInIds[0] || !lockerOutIds[0]) {
-    throw new Error('Missing Locker-In or Locker-Out link')
+    throw new Error('Booking has Check-in/Check-out datetimes but missing Locker-In or Locker-Out link')
   }
   const dropoffShift = shiftForEvent(new Date(checkInIso))
   const pickupShift = shiftForEvent(new Date(checkOutIso))
