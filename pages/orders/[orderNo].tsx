@@ -929,7 +929,10 @@ const OrderPage = ({
 
   const deliveryAddress = fields['Delivery Address'] || ''
   const pickupAddress = fields['Heimilisfang'] || ''
-  const hotelName = fields['Hótel Nafn'] || ''
+  // `Hótel Nafn` is still written for the dispatcher's quick reference and
+  // for legacy compatibility, but the customer-facing rendering reads the
+  // hotel name straight out of the multi-line address string — no separate
+  // hotelName variable needed here.
 
   // P&D: always show map; toggle pickup vs delivery at the moment of pickup
   // Other services: existing behaviour (Planned = pickup, Delivered = delivery)
