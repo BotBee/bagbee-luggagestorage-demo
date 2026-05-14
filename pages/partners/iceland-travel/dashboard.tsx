@@ -179,6 +179,12 @@ const Pill = styled('button', {
   &:hover { border-color: #3d7165; }
 `
 
+// Below 720px we collapse the table into a card-per-row layout. Each row
+// becomes a stacked card; each cell is prefixed with its column label via
+// the `data-label` attribute. The Status / Bags cells get a flex-row at
+// the bottom so the badge + bag count sit side-by-side.
+const MOBILE_BREAKPOINT = '720px'
+
 const TableCard = styled.div`
   background: white;
   border-radius: 18px;
@@ -190,6 +196,15 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   font-family: 'Poppins', sans-serif;
+  @media (max-width: ${MOBILE_BREAKPOINT}) {
+    display: block;
+    & thead {
+      display: none;
+    }
+    & tbody {
+      display: block;
+    }
+  }
 `
 
 const Th = styled.th`
@@ -211,11 +226,76 @@ const Td = styled.td`
   color: #000929;
   border-bottom: 1px solid #f1f2f4;
   vertical-align: top;
+  @media (max-width: ${MOBILE_BREAKPOINT}) {
+    padding: 0;
+    border: none;
+    display: block;
+    /* Hide the auto-injected label by default; specific cells re-enable. */
+    &::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: #a3a4a7;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 2px;
+    }
+    /* Compact, label-less cells where the value is self-explanatory. */
+    &[data-label='Ref #']::before,
+    &[data-label='Service']::before,
+    &[data-label='Pickup']::before,
+    &[data-label='Bags']::before,
+    &[data-label='Status']::before {
+      display: none;
+    }
+    &[data-label='Ref #'] {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    &[data-label='Status'] {
+      justify-self: end;
+      text-align: right;
+    }
+    &[data-label='Service'] {
+      color: #696f79;
+      font-size: 12px;
+    }
+  }
 `
 
 const Row = styled.tr`
   transition: background 0.1s;
   &:hover { background: #fafbfc; cursor: pointer; }
+  @media (max-width: ${MOBILE_BREAKPOINT}) {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    /* DOM order: Ref / Pickup / Service / From / To / Bags / Driver / Status.
+       We name areas so each cell drops into a logical spot regardless of
+       DOM order: identifier strip on top, then schedule, locations, dispatch. */
+    grid-template-areas:
+      'ref status'
+      'pickup pickup'
+      'service service'
+      'from to'
+      'driver bags';
+    column-gap: 16px;
+    row-gap: 10px;
+    align-items: start;
+    padding: 16px 18px;
+    border-bottom: 1px solid #f1f2f4;
+    &:last-child {
+      border-bottom: none;
+    }
+    & > td[data-label='Ref #'] { grid-area: ref; }
+    & > td[data-label='Pickup'] { grid-area: pickup; }
+    & > td[data-label='Service'] { grid-area: service; }
+    & > td[data-label='From'] { grid-area: from; }
+    & > td[data-label='To'] { grid-area: to; }
+    & > td[data-label='Bags'] { grid-area: bags; justify-self: end; }
+    & > td[data-label='Driver'] { grid-area: driver; }
+    & > td[data-label='Status'] { grid-area: status; }
+  }
 `
 
 const Badge = styled.span<{ bg: string }>`
@@ -535,21 +615,21 @@ export default function PartnerDashboard({
                       window.location.href = `/partners/iceland-travel/orders/${o.id}`
                     }}
                   >
-                    <Td>
+                    <Td data-label="Ref #">
                       {o.reference ? (
                         <div style={{ fontWeight: 600 }}>{o.reference}</div>
                       ) : (
                         <span style={{ color: '#a3a4a7', fontSize: 12 }}>—</span>
                       )}
                     </Td>
-                    <Td>
+                    <Td data-label="Pickup">
                       <div style={{ fontWeight: 600 }}>{fmtDateShort(o.pickupDate)}</div>
                       <div style={{ color: '#696f79', fontSize: 11, marginTop: 2 }}>
                         {fmtDateWeekday(o.pickupDate)} · {o.timeWindow || '—'}
                       </div>
                     </Td>
-                    <Td>{o.serviceType || '—'}</Td>
-                    <Td>
+                    <Td data-label="Service">{o.serviceType || '—'}</Td>
+                    <Td data-label="From">
                       <div>{o.pickupAddress || '—'}</div>
                       {o.timeWindow && (
                         <div style={{ color: '#696f79', fontSize: 11, marginTop: 2 }}>
@@ -557,7 +637,7 @@ export default function PartnerDashboard({
                         </div>
                       )}
                     </Td>
-                    <Td>
+                    <Td data-label="To">
                       <div>{goingTo}</div>
                       {/* Same-day is the default for Iceland Travel orders;
                           only the time window is worth surfacing here. If
@@ -587,13 +667,13 @@ export default function PartnerDashboard({
                           )
                         })()}
                     </Td>
-                    <Td>
+                    <Td data-label="Bags">
                       <Bag>
                         <span aria-hidden>🧳</span> {total}
                         {o.bagsOdd > 0 ? ` (${o.bagsOdd} odd)` : ''}
                       </Bag>
                     </Td>
-                    <Td>
+                    <Td data-label="Driver">
                       {o.driverName ? (
                         <Driver onClick={(e) => e.stopPropagation()}>
                           <DriverName>{o.driverName}</DriverName>
@@ -609,7 +689,7 @@ export default function PartnerDashboard({
                         <Unassigned>Awaiting</Unassigned>
                       )}
                     </Td>
-                    <Td>
+                    <Td data-label="Status">
                       {o.status ? (
                         <Badge bg={o.statusColor || '#6b7280'}>{o.status}</Badge>
                       ) : (
