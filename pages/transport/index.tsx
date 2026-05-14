@@ -25,6 +25,7 @@ import {
   BSI_AFTER_HOURS_SLOT,
   deliveryLocationOptions,
   findLocation,
+  minSameDayDeliveryHour,
   pickupLocationOptions,
   timeSlotOptionsForLocation,
 } from '../../common/transportConstants'
@@ -68,8 +69,14 @@ const COPY = {
       timeWindow: 'Time window',
       kefPickupHintArrival:
         'A BagBee driver will already be at KEF for one of our Pickup & Delivery runs that day. They’ll be outside arrivals with a luggage truck — we’ll email the exact spot, the driver’s phone number, and a photo a few hours before you land. Just walk over and hand off your bags.',
-      kefPickupHintLocker:
-        'Drop your bags in one of our two locked compartments at The Bike Pit, just outside the arrivals terminal. We’ll email you the PIN code and locker number a few hours before you land; we collect on our noon or 22:00 run.',
+      // {collection} is replaced at render time with the specific run
+      // (noon vs 22:00) we'll empty the locker on, based on the customer's
+      // landing hour. Keeps the message concrete instead of "noon or 22:00".
+      kefPickupHintLockerTemplate:
+        'Drop your bags in one of our two locked compartments at The Bike Pit, just outside the arrivals terminal. We’ll email you the PIN code and locker number a few hours before you land. We’ll collect them on our {collection} run and handle them according to your order from there.',
+      kefPickupHintLockerNoon: 'noon',
+      kefPickupHintLockerEvening: '22:00',
+      kefPickupHintLockerNextNoon: 'noon (the day after)',
       kefPickupHintUnavailable:
         'KEF pickup is fully booked for this date. Email us at bagbee@bagbee.is and we’ll see what we can arrange.',
       kefPickupHintLoading: 'Checking KEF availability for that date…',
@@ -147,8 +154,11 @@ const COPY = {
       timeWindow: 'Tímabil',
       kefPickupHintArrival:
         'BagBee bílstjóri verður á KEF í einni af Pickup & Delivery ferðunum okkar þennan dag. Hann bíður fyrir utan komusalinn með farangurskerru — við sendum nákvæma staðsetningu, símanúmer og mynd í tölvupósti nokkrum tímum áður en þú lendir. Gakktu beint að honum og afhentu töskurnar.',
-      kefPickupHintLocker:
-        'Skildu töskurnar eftir í annarri af tveimur lyklageymslum okkar við The Bike Pit, rétt fyrir utan komusalinn. Við sendum þér PIN-númer og lyklageymslunúmer í tölvupósti nokkrum tímum áður en þú lendir; við sækjum á hádegi eða kl. 22.',
+      kefPickupHintLockerTemplate:
+        'Skildu töskurnar eftir í annarri af tveimur lyklageymslum okkar við The Bike Pit, rétt fyrir utan komusalinn. Við sendum þér PIN-númer og lyklageymslunúmer í tölvupósti nokkrum tímum áður en þú lendir. Við sækjum þær á {collection} ferð okkar og afgreiðum þær samkvæmt pöntuninni þaðan.',
+      kefPickupHintLockerNoon: 'hádegis',
+      kefPickupHintLockerEvening: '22:00',
+      kefPickupHintLockerNextNoon: 'hádegis (daginn eftir)',
       kefPickupHintUnavailable:
         'KEF sókn er fullbókuð á þessari dagsetningu. Sendu okkur tölvupóst á bagbee@bagbee.is og við athugum hvað við getum gert.',
       kefPickupHintLoading: 'Athuga KEF-aðgengi fyrir þessa dagsetningu…',
@@ -883,7 +893,28 @@ const TransportPage = () => {
                         : kefPickupMode === 'pickup-delivery'
                           ? t.fields.kefPickupHintArrival
                           : kefPickupMode === 'locker'
-                            ? t.fields.kefPickupHintLocker
+                            ? // Pick the specific collection run based on
+                              // the landing hour and substitute it into the
+                              // template. Morning landing → noon. Afternoon
+                              // → 22:00. Late evening → next day's noon.
+                              (() => {
+                                const landingH = (() => {
+                                  const m = /^(\d{1,2}):(\d{2})/.exec(
+                                    booking.pickupTime || '',
+                                  )
+                                  return m ? parseInt(m[1], 10) : 0
+                                })()
+                                const collection =
+                                  landingH < 12
+                                    ? t.fields.kefPickupHintLockerNoon
+                                    : landingH < 22
+                                      ? t.fields.kefPickupHintLockerEvening
+                                      : t.fields.kefPickupHintLockerNextNoon
+                                return t.fields.kefPickupHintLockerTemplate.replace(
+                                  '{collection}',
+                                  collection,
+                                )
+                              })()
                             : kefPickupMode === 'unavailable'
                               ? t.fields.kefPickupHintUnavailable
                               : t.fields.kefPickupHintNeedFlight
@@ -1157,7 +1188,20 @@ const TransportPage = () => {
                     disabled={!booking.deliveryLocation}
                   >
                     <option value="">{t.placeholders.chooseTime}</option>
-                    {timeSlotOptionsForLocation(booking.deliveryLocation, 'delivery').map((s) => (
+                    {timeSlotOptionsForLocation(booking.deliveryLocation, 'delivery', {
+                      // When pickup is KEF and delivery is same-day, the
+                      // bags physically can't be in our hands before 14:00
+                      // (locker collected at noon + 2h transit). Filter
+                      // morning slots so the customer can't pick something
+                      // we can't fulfil. Multi-day delivery returns 0 from
+                      // the helper → no filtering.
+                      minStartHour: minSameDayDeliveryHour(
+                        booking.pickupLocation,
+                        booking.pickupDate,
+                        booking.deliveryDate,
+                        booking.pickupTime,
+                      ),
+                    }).map((s) => (
                       <option key={s.value} value={s.value}>
                         {s.value}
                       </option>

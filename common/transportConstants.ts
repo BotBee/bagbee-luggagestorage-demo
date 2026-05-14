@@ -133,6 +133,27 @@ export const TRANSPORT_TIME_SLOTS: TransportTimeSlot[] = [
   { value: '10:00 - 11:00', category: 'morning', isFlexible: false, availableForPickup: true, availableForDelivery: true, sortOrder: 50 },
   { value: '11:00 - 12:00', category: 'morning', isFlexible: false, availableForPickup: true, availableForDelivery: true, sortOrder: 60 },
 
+  // Afternoon delivery slot — only offered for hotels and cruise terminals.
+  // The Skarfabakki/Miðbakki/Kornagarðar piers don't board passengers until
+  // mid-afternoon, and hotels happily take bags in. Restricted via
+  // restrictDeliveryToLocations so this slot doesn't appear for KEF or BSÍ
+  // delivery (where it'd be misleading — KEF check-in cutoffs differ;
+  // BSÍ has its own slot set).
+  {
+    value: '14:00 - 15:00',
+    category: 'morning', // category-naming wart; this is just an afternoon slot
+    isFlexible: false,
+    availableForPickup: false,
+    availableForDelivery: true,
+    sortOrder: 70,
+    restrictDeliveryToLocations: [
+      'hotel-delivery',
+      'cruise-skarfabakki',
+      'cruise-midbakki',
+      'cruise-kornargardar',
+    ],
+  },
+
   // Evening flex — both legs
   {
     value: '19:00 - 22:00 (flexible for the driver)',
@@ -202,18 +223,79 @@ export const pickupLocationOptions = (): TransportLocation[] =>
 export const deliveryLocationOptions = (): TransportLocation[] =>
   TRANSPORT_LOCATIONS.filter((l) => l.availableForDelivery).sort((a, b) => a.sortOrder - b.sortOrder)
 
+// Extract the START hour of a time-window string like '08:30 - 09:00' or
+// '14:00 - 15:00 (flexible)'. Used to filter out slots that would be
+// physically impossible given the pickup logistics. Returns null for
+// special slots that don't have a parseable HH:MM start (e.g. the BSÍ
+// after-hours locker option).
+export const parseSlotStartHour = (slot: string): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(slot.trim())
+  if (!m) return null
+  const h = parseInt(m[1], 10) + parseInt(m[2], 10) / 60
+  return Number.isFinite(h) ? h : null
+}
+
+// Earliest delivery hour given the pickup config, when pickup and delivery
+// fall on the same calendar day. Multi-day deliveries return 0 (no
+// constraint — bags can sit in BagBee's hands overnight).
+//
+// Logic: KEF pickup bags get into BagBee's hands at noon (morning landing,
+// locker collection) or 22:00 (afternoon landing). Add ~2 hours buffer
+// for the transit + handoff. Other pickup locations have a fast hand-off
+// (driver collects directly from customer) so no minimum is enforced.
+export const minSameDayDeliveryHour = (
+  pickupLocation: string | null | undefined,
+  pickupDate: string | null | undefined,
+  deliveryDate: string | null | undefined,
+  pickupTime: string | null | undefined,
+): number => {
+  if (!pickupDate || !deliveryDate) return 0
+  if (pickupDate !== deliveryDate) return 0
+  if (pickupLocation !== 'kef-airport') return 0
+  const landing = parseSlotStartHour(pickupTime || '')
+  // Without a known landing time, fall back to the morning-collection
+  // assumption (noon + 2h buffer) — least restrictive of the same-day
+  // limits, won't accidentally hide legit slots.
+  if (landing === null) return 14
+  if (landing < 12) return 14 // bags collected at noon → earliest 14:00
+  // Landings at noon or later mean the next BagBee KEF run is 22:00;
+  // same-day delivery after that is impractical. Return a number > 24
+  // so every same-day delivery slot gets filtered out and the customer
+  // sees an empty list, which is the truthful answer.
+  return 25
+}
+
 // Time slot options for a given leg. Returns the BSI-specific slot set when
 // the leg is at BSÍ Flybus (its own opening hours + after-hours locker
-// option), and the regular morning/evening route slots otherwise.
+// option), and the regular morning/evening route slots otherwise. Slots
+// can also opt-in to specific delivery locations via
+// restrictDeliveryToLocations — used by the 14:00 afternoon slot which
+// only makes sense for hotels + cruise terminals. The `minStartHour`
+// option filters out slots starting earlier than the given hour (used
+// when KEF pickup makes morning same-day delivery physically impossible).
 export const timeSlotOptionsForLocation = (
   location: string | null | undefined,
   side: 'pickup' | 'delivery',
+  opts?: { minStartHour?: number },
 ): TransportTimeSlot[] => {
   const source =
     location === 'bsi-flybus' ? TRANSPORT_BSI_TIME_SLOTS : TRANSPORT_TIME_SLOTS
   const flag = side === 'pickup' ? 'availableForPickup' : 'availableForDelivery'
+  const minHour = opts?.minStartHour ?? 0
   return source
     .filter((s) => s[flag])
+    .filter((s) => {
+      if (side !== 'delivery') return true
+      if (!s.restrictDeliveryToLocations) return true
+      return location ? s.restrictDeliveryToLocations.includes(location as any) : false
+    })
+    .filter((s) => {
+      if (minHour <= 0) return true
+      const startH = parseSlotStartHour(s.value)
+      // Slots without a parseable start (e.g. the BSÍ after-hours locker)
+      // are kept as-is — the min-hour filter only applies to numeric slots.
+      return startH === null ? true : startH >= minHour
+    })
     .sort((a, b) => a.sortOrder - b.sortOrder)
 }
 

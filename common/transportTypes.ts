@@ -41,6 +41,10 @@ export type TransportTimeSlot = {
   availableForPickup: boolean
   availableForDelivery: boolean
   sortOrder: number
+  // If set, the slot is only offered for delivery legs whose location is
+  // in this list. Used for the afternoon 14:00–15:00 window which only
+  // makes sense for hotel + cruise terminal deliveries.
+  restrictDeliveryToLocations?: LocationKind[]
 }
 
 export type TransportAddress = {
