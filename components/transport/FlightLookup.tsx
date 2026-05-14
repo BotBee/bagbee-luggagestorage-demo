@@ -134,6 +134,10 @@ const COPY = {
     delayed: 'Delayed',
     early: 'Early',
     didYouMean: 'Did you mean:',
+    // `{count}` is interpolated at render time so the count reflects how many
+    // flights actually match the current `parsed.airline` + `parsed.number`
+    // prefix. Customers can keep typing digits to narrow it down.
+    didYouMeanCount: 'Did you mean: ({count} flights — type more digits to narrow down)',
     enterManually: 'Or enter your landing time manually',
     manualLabel: 'Landing time',
     manualHelp: 'We’ll use this to build your pick-up window. Format: HH:MM.',
@@ -158,6 +162,7 @@ const COPY = {
     delayed: 'Seinkað',
     early: 'Á undan',
     didYouMean: 'Áttirðu við:',
+    didYouMeanCount: 'Áttirðu við: ({count} flug — sláðu inn fleiri tölustafi til að þrengja)',
     enterManually: 'Eða skráðu lendingartímann handvirkt',
     manualLabel: 'Lendingartími',
     manualHelp: 'Við notum þetta til að setja upp sækjugluggann. Snið: HH:MM.',
@@ -179,9 +184,17 @@ const NoMatchBox = styled.div`
   color: #7a5400;
 `
 
+// Show every same-airline flight that day. Icelandair runs ~50–70 flights
+// per direction, so we cap visual height and scroll — picking a flight from
+// just the morning bank (the old slice(0,8) behaviour) hid the long-haul
+// afternoon + evening flights customers actually need.
 const SuggestionList = styled.div`
   display: grid;
   gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  /* Slight inset so the scrollbar doesn't clip the row borders. */
+  padding-right: 4px;
 `
 
 const SuggestionButton = styled.button`
@@ -306,8 +319,9 @@ const FlightLookup = ({
   // Same-airline suggestions when there's no exact number match. As the
   // customer types more digits the list narrows: 'FI' shows every Icelandair
   // flight that day, 'FI5' narrows to FI flights whose number starts with 5
-  // (FI587, FI544, …), 'FI54' narrows further. Sorted by scheduled time and
-  // capped at 8 so the dropdown stays scannable.
+  // (FI587, FI544, …), 'FI54' narrows further. Sorted by scheduled time.
+  // No slice — the SuggestionList container scrolls so the whole day is
+  // reachable (Icelandair's morning bank was hiding the afternoon flights).
   const sameAirlineSuggestions: FlightData[] =
     parsed && data && !match
       ? data
@@ -318,7 +332,6 @@ const FlightLookup = ({
               : true,
           )
           .sort((a, b) => (a.ScheduledDateTime || '').localeCompare(b.ScheduledDateTime || ''))
-          .slice(0, 8)
       : []
 
   // Synthesize a "manual match" FlightData when the customer commits a manual
@@ -416,7 +429,14 @@ const FlightLookup = ({
         {parsed && parsed.number && <div>{t.notFound}</div>}
         {sameAirlineSuggestions.length > 0 && (
           <>
-            <div>{t.didYouMean}</div>
+            <div>
+              {sameAirlineSuggestions.length > 8
+                ? t.didYouMeanCount.replace(
+                    '{count}',
+                    String(sameAirlineSuggestions.length),
+                  )
+                : t.didYouMean}
+            </div>
             <SuggestionList>
               {sameAirlineSuggestions.map((f) => {
                 const display = `${f.AirlineIATA}${stripZero(f.FlightNumber || '0')}`
