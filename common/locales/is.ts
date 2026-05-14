@@ -283,6 +283,15 @@ const orderTrackingPage = {
   fastTrackError:
     'Fast-Track greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
   fastTrackMaxPassengers: 'Hámark 4 farþegar á hverja Fast-Track pöntun.',
+  fastTrackActiveTitle: 'Fast-Track er virkt',
+  fastTrackActiveDescription:
+    'Slepptu biðröðinni við öryggisleit á flugdaginn. Sýndu staðfestingarpóstinn við Fast-Track hliðið.',
+  fastTrackValidThrough: 'Gildir til {date}',
+  fastTrackExpiredTitle: 'Fast-Track útrunnið',
+  fastTrackExpiredDescription:
+    'Fast-Track þitt gilti til {date} og er ekki lengur virkt.',
+  fastTrackPassengersLabel: 'Farþegar',
+  fastTrackAddMore: '+ Bæta við farþega',
 
   // Cancel order
   cancelOrder: {

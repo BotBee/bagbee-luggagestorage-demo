@@ -669,12 +669,28 @@ const TipSubmit = styled.button`
 // --- Types ---
 type Photo = { url: string; filename: string; type: string; tagNumber?: string }
 type OrderFields = { [key: string]: any }
+type FastTrackPassenger = { firstName: string; lastName: string }
+type FastTrackRecord = {
+  id: string
+  passengers: FastTrackPassenger[]
+  flightDate: string | null
+  paidAmount: number | null
+}
+// Derived server-side from the paid Fast-Track rows + today's date so the
+// active/expired card renders identically on SSR and client (no hydration
+// mismatch around midnight).
+type FastTrackSummary = {
+  state: 'active' | 'expired'
+  flightDate: string | null
+  passengers: FastTrackPassenger[]
+}
 
 interface OrderPageProps {
   order: { id: string; fields: OrderFields } | null
   photos: Photo[]
   orderNo: string
   scheduledAt: string | null
+  fastTrackSummary: FastTrackSummary | null
 }
 
 const ALL_STATUSES: OrderStatus[] = ['Pending', 'Confirmed', 'Planned', 'In Progress', 'Delivered']
@@ -752,12 +768,166 @@ function formatEtaWindow(isoString: string | null): string | null {
   return `${fmt(earlier)} - ${fmt(later)}`
 }
 
+// Active/expired confirmation card shown on the order page when the customer
+// has already paid for Fast-Track. Green when active (through flight day),
+// red the day after. Active state offers an "Add another passenger" link
+// that re-opens the existing purchase form.
+const FastTrackStatusCard = ({
+  state,
+  passengers,
+  flightDate,
+  t,
+  onAddMore,
+}: {
+  state: 'active' | 'expired'
+  passengers: FastTrackPassenger[]
+  flightDate: string | null
+  t: any
+  onAddMore: () => void
+}) => {
+  const isActive = state === 'active'
+  const dateStr = flightDate ? formatDate(flightDate) : ''
+  const description = isActive
+    ? t.fastTrackActiveDescription
+    : String(t.fastTrackExpiredDescription).replace('{date}', dateStr)
+  return (
+    <div
+      style={{
+        background: isActive
+          ? 'linear-gradient(135deg, #f0faf5 0%, #dff4e9 100%)'
+          : 'linear-gradient(135deg, #fdf2f2 0%, #fadbdb 100%)',
+        border: `1px solid ${isActive ? '#3D7165' : '#c33'}`,
+        borderRadius: 20,
+        padding: 24,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: isActive ? '#3D7165' : '#c33',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 22,
+            fontWeight: 600,
+          }}
+        >
+          {isActive ? '✓' : '!'}
+        </div>
+        <div>
+          <h3
+            style={{
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 600,
+              fontSize: 17,
+              color: '#000929',
+              margin: 0,
+            }}
+          >
+            {isActive ? t.fastTrackActiveTitle : t.fastTrackExpiredTitle}
+          </h3>
+          {flightDate && (
+            <p
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: 13,
+                color: isActive ? '#3D7165' : '#c33',
+                margin: '2px 0 0',
+                fontWeight: 500,
+              }}
+            >
+              {String(t.fastTrackValidThrough).replace('{date}', dateStr)}
+            </p>
+          )}
+        </div>
+      </div>
+      <p
+        style={{
+          fontFamily: 'Poppins, sans-serif',
+          fontSize: 13,
+          color: '#696f79',
+          lineHeight: 1.5,
+          margin: 0,
+        }}
+      >
+        {description}
+      </p>
+      {passengers.length > 0 && (
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.6)',
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          <p
+            style={{
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#696f79',
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+              margin: '0 0 6px',
+            }}
+          >
+            {t.fastTrackPassengersLabel}
+          </p>
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: 14,
+              color: '#000929',
+            }}
+          >
+            {passengers.map((p, i) => (
+              <li key={i} style={{ padding: '2px 0' }}>
+                {`${p.firstName} ${p.lastName}`.trim()}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {isActive && (
+        <button
+          onClick={onAddMore}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: '4px 0 0',
+            color: '#e37f2f',
+            fontFamily: 'Poppins, sans-serif',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            textAlign: 'left',
+            textDecoration: 'underline',
+          }}
+        >
+          {t.fastTrackAddMore}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // --- Component ---
 const OrderPage = ({
   order,
   photos,
   orderNo,
   scheduledAt,
+  fastTrackSummary,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter()
   const t = (router.locale === 'en' ? en : is).orderTrackingPage
@@ -1658,14 +1828,24 @@ const OrderPage = ({
             once the customer had ever updated bag count / time window. */}
         {!isEditing && !showFastTrack && !isPickupDelivery && (
           <ActionGrid>
-            <ActionCard variant='primary'>
-              <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
-              <ActionTitle>{t.fastTrackTitle}</ActionTitle>
-              <ActionDescription>{t.fastTrackDescription}</ActionDescription>
-              <ActionButton variant='primary' onClick={openFastTrack}>
-                {t.fastTrackOpenButton}
-              </ActionButton>
-            </ActionCard>
+            {fastTrackSummary ? (
+              <FastTrackStatusCard
+                state={fastTrackSummary.state}
+                passengers={fastTrackSummary.passengers}
+                flightDate={fastTrackSummary.flightDate}
+                t={t}
+                onAddMore={openFastTrack}
+              />
+            ) : (
+              <ActionCard variant='primary'>
+                <ActionIcon variant='primary'>&#9992;&#xFE0E;</ActionIcon>
+                <ActionTitle>{t.fastTrackTitle}</ActionTitle>
+                <ActionDescription>{t.fastTrackDescription}</ActionDescription>
+                <ActionButton variant='primary' onClick={openFastTrack}>
+                  {t.fastTrackOpenButton}
+                </ActionButton>
+              </ActionCard>
+            )}
           </ActionGrid>
         )}
         {!isEditing && showFastTrack && !isPickupDelivery && (
@@ -2533,7 +2713,7 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
 }) => {
   const orderNo = params?.orderNo as string
   if (!orderNo) {
-    return { props: { order: null, photos: [], orderNo: '', scheduledAt: null } }
+    return { props: { order: null, photos: [], orderNo: '', scheduledAt: null, fastTrackSummary: null } }
   }
 
   try {
@@ -2562,7 +2742,7 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
       `${baseUrl}/api/airtable/read-by-order-no?orderNo=${orderNo}`
     )
     if (!orderRes.ok) {
-      return { props: { order: null, photos: [], orderNo, scheduledAt: null } }
+      return { props: { order: null, photos: [], orderNo, scheduledAt: null, fastTrackSummary: null } }
     }
     const order = await orderRes.json()
 
@@ -2596,10 +2776,60 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
       }
     }
 
-    return { props: { order, photos, orderNo, scheduledAt } }
+    // Fetch any paid Fast-Track records linked to this order, then derive the
+    // active/expired summary server-side. Doing the date comparison here (not
+    // on the client) avoids a hydration mismatch around midnight and keeps the
+    // active-through-flight-day cutoff stable for the whole page session.
+    let fastTrackSummary: FastTrackSummary | null = null
+    try {
+      const ftRes = await fetch(
+        `${baseUrl}/api/airtable/fast-track-by-order-no?orderNo=${orderNo}`
+      )
+      if (ftRes.ok) {
+        const ftData = await ftRes.json()
+        const rows: FastTrackRecord[] = ftData.fastTracks || []
+        if (rows.length > 0) {
+          // Merge passengers across all paid rows; de-dupe on case-folded name
+          const seen = new Set<string>()
+          const passengers: FastTrackPassenger[] = []
+          for (const row of rows) {
+            for (const p of row.passengers) {
+              const key = `${p.firstName}|${p.lastName}`.toLowerCase()
+              if (!seen.has(key)) {
+                seen.add(key)
+                passengers.push(p)
+              }
+            }
+          }
+          // Prefer the Fast-Track row's stored Flight date; fall back to the
+          // order's own Dagsetning flugs so even older rows that pre-date the
+          // copy-flight-date logic still render correctly.
+          const ftFlightDate = rows
+            .map((r) => r.flightDate)
+            .find((d): d is string => !!d) || null
+          const orderFlightDate = order?.fields?.['Dagsetning flugs']
+            ? String(order.fields['Dagsetning flugs']).slice(0, 10)
+            : null
+          const flightDate = ftFlightDate
+            ? String(ftFlightDate).slice(0, 10)
+            : orderFlightDate
+          // Active through the flight day itself; expired starting the day
+          // after. Iceland runs on UTC year-round so UTC today equals local
+          // today in Reykjavík.
+          const today = new Date().toISOString().slice(0, 10)
+          const state: 'active' | 'expired' =
+            flightDate && today > flightDate ? 'expired' : 'active'
+          fastTrackSummary = { state, flightDate, passengers }
+        }
+      }
+    } catch {
+      // optional — falls back to the purchase promo
+    }
+
+    return { props: { order, photos, orderNo, scheduledAt, fastTrackSummary } }
   } catch (error) {
     console.error('Error fetching order:', error)
-    return { props: { order: null, photos: [], orderNo, scheduledAt: null } }
+    return { props: { order: null, photos: [], orderNo, scheduledAt: null, fastTrackSummary: null } }
   }
 }
 

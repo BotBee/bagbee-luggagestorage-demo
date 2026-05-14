@@ -280,6 +280,15 @@ const orderTrackingPage = {
   fastTrackError:
     'Fast-Track payment failed. Please try again or contact BagBee.',
   fastTrackMaxPassengers: 'Maximum 4 passengers per Fast-Track order.',
+  fastTrackActiveTitle: 'Fast-Track is active',
+  fastTrackActiveDescription:
+    'Skip the security queue on your flight day. Show the confirmation email at the Fast-Track lane.',
+  fastTrackValidThrough: 'Valid through {date}',
+  fastTrackExpiredTitle: 'Fast-Track expired',
+  fastTrackExpiredDescription:
+    'Your Fast-Track was valid through {date} and is no longer active.',
+  fastTrackPassengersLabel: 'Passengers',
+  fastTrackAddMore: '+ Add another passenger',
 
   // Cancel order
   cancelOrder: {
