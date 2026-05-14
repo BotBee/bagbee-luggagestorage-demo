@@ -1,7 +1,13 @@
 import React from 'react'
+import dynamic from 'next/dynamic'
 import * as animationData from '../../public/lottie/airplane_loading.json'
-import Lottie from 'react-lottie'
 import styled from '@emotion/styled'
+
+// react-lottie depends on lottie-web, which touches `document` at module
+// load. That breaks Next.js's prod build during page-data collection
+// (`ReferenceError: document is not defined`). Loading it dynamically with
+// `ssr: false` keeps it client-only and lets the rest of the app build.
+const Lottie = dynamic(() => import('react-lottie'), { ssr: false })
 
 interface ILoaderProps {
   text: string

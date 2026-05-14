@@ -1,4 +1,8 @@
-import Lottie from 'react-lottie'
+import dynamic from 'next/dynamic'
+// react-lottie pulls in lottie-web which touches `document` at module load
+// and breaks `next build`'s page-data collection. Loading it client-only
+// via next/dynamic keeps the prod build green.
+const Lottie = dynamic(() => import('react-lottie'), { ssr: false })
 import Header from '../../components/header/Header'
 import Message from '../../components/message/Message'
 import styled from '@emotion/styled'
