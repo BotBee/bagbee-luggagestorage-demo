@@ -143,3 +143,19 @@ export type PricingContext = {
   // table (`Transport Surcharge` column). e.g. { '230': 28000 }.
   postcodeSurcharges: Record<string, number>
 }
+
+// Response shape of /api/transport/kef-availability. Lives here (not in the
+// API route file) so client components can import the type without dragging
+// in the route's server-only dependencies through Next.js's dependency graph.
+export type KefDriverWindow = {
+  startHour: number // 0–23.99, decimal so 06:30 = 6.5
+  endHour: number
+  label: string // raw Tímasetning string, useful for debugging
+}
+
+export type KefAvailability = {
+  driverWindows: KefDriverWindow[]
+  lockersInUse: number
+  lockerCapacity: number
+  inLockerSeason: boolean
+}

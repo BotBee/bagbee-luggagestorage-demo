@@ -6,7 +6,7 @@ import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
 import { ChangeEvent, useMemo, useState } from 'react'
 
-import type { KefAvailability } from '../api/transport/kef-availability'
+import type { KefAvailability } from '../../common/transportTypes'
 
 import Button from '../../components/button/Button'
 import BackButton from '../../components/form/back-button/BackButton'
@@ -63,6 +63,8 @@ const COPY = {
       selectDate: 'Select date',
       bsiLockerNote:
         'After 17:00 the BSÍ counter is closed. We’ll email you a PIN code and the locker number so you can drop off / pick up your luggage at the BSÍ luggage lockers any time.',
+      bsiOpeningHoursNote:
+        'Our counter is inside BSÍ next to the Flybus desk. Staffed daily 06:45 – 17:00.',
       timeWindow: 'Time window',
       kefPickupHintArrival:
         'A BagBee driver will already be at KEF for one of our Pickup & Delivery runs that day. They’ll be outside arrivals with a luggage truck — we’ll email the exact spot, the driver’s phone number, and a photo a few hours before you land. Just walk over and hand off your bags.',
@@ -140,6 +142,8 @@ const COPY = {
       selectDate: 'Veldu dagsetningu',
       bsiLockerNote:
         'Eftir kl. 17:00 er afgreiðsla á BSÍ lokuð. Við sendum þér PIN-númer og lyklageymslunúmer í tölvupósti svo þú getur skilið eftir / sótt töskurnar í lyklageymslunni á BSÍ á þeim tíma sem hentar.',
+      bsiOpeningHoursNote:
+        'Afgreiðsla okkar er inni á BSÍ við hliðina á Flybus borðinu. Opin daglega 06:45 – 17:00.',
       timeWindow: 'Tímabil',
       kefPickupHintArrival:
         'BagBee bílstjóri verður á KEF í einni af Pickup & Delivery ferðunum okkar þennan dag. Hann bíður fyrir utan komusalinn með farangurskerru — við sendum nákvæma staðsetningu, símanúmer og mynd í tölvupósti nokkrum tímum áður en þú lendir. Gakktu beint að honum og afhentu töskurnar.',
@@ -494,6 +498,22 @@ const KefWindowHint = styled.div`
   margin-top: 4px;
 `
 
+// Calmer blue-grey info note for BSI counter hours. Shown whenever BSÍ is
+// the selected leg — separate from BsiLockerNote (yellow/warn) which only
+// fires for the after-hours locker slot.
+const BsiInfoNote = styled.div`
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #eef3f8;
+  border: 1px solid #cdd9e5;
+  font-family: 'Poppins';
+  font-size: 13px;
+  line-height: 18px;
+  color: #1f3a5f;
+`
+
 const BsiLockerNote = styled.div`
   display: flex;
   gap: 10px;
@@ -708,6 +728,20 @@ const TransportPage = () => {
       //    /<locale>/orders/<last5>?paid=true (set in complete_payment_url)
       //    and the webhook at /api/payment/webhooks marks the row Greitt +
       //    fires the Payday invoice if a Kennitala is present.
+      //
+      //    On failure / customer-cancels, Rapyd redirects to /payment/cancel
+      //    (we set `cancel_checkout_url` + `&service=transport` in
+      //    mapTransportToPayment). That page reads the recordId and offers
+      //    a one-click 'Retry payment' against the same Airtable order via
+      //    /api/rapyd/retry — customer doesn't refill the form. The
+      //    service=transport param also routes the 'Start over' link back
+      //    here instead of /book.
+      //
+      //    We deliberately do NOT reset the Zustand store here. The
+      //    window.location.assign causes a full page unload so the
+      //    in-memory store dies anyway; on retry the customer never returns
+      //    to this page in the first place. Resetting now would only hurt
+      //    the rare back-button-from-Rapyd case.
       window.location.assign(redirectUrl)
     } catch (err) {
       console.error('[transport] submit failed', err)
@@ -732,7 +766,8 @@ const TransportPage = () => {
     const setAddr = isPickup ? setPickupAddress : setDeliveryAddress
     const flightVal = isPickup ? booking.pickupFlightNumber : booking.deliveryFlightNumber
     const cruiseVal = isPickup ? booking.pickupCruiseShipName : booking.deliveryCruiseShipName
-    const outsideVal = isPickup ? booking.pickupOutsideHours : booking.deliveryOutsideHours
+    // outsideHours toggle was removed from the UI but the booking shape
+    // still carries the field; we just don't bind anything to it here.
     const leaveVal = isPickup ? booking.pickupLeaveAtReception : booking.deliveryLeaveAtReception
 
     return (
@@ -1076,6 +1111,9 @@ const TransportPage = () => {
                 </Field>
               )}
             </FieldGrid>
+            {booking.pickupLocation === 'bsi-flybus' && (
+              <BsiInfoNote>{t.fields.bsiOpeningHoursNote}</BsiInfoNote>
+            )}
             {booking.pickupTime === BSI_AFTER_HOURS_SLOT && (
               <BsiLockerNote>{t.fields.bsiLockerNote}</BsiLockerNote>
             )}
@@ -1128,6 +1166,9 @@ const TransportPage = () => {
                 </Field>
               )}
             </FieldGrid>
+            {booking.deliveryLocation === 'bsi-flybus' && (
+              <BsiInfoNote>{t.fields.bsiOpeningHoursNote}</BsiInfoNote>
+            )}
             {booking.deliveryTime === BSI_AFTER_HOURS_SLOT && (
               <BsiLockerNote>{t.fields.bsiLockerNote}</BsiLockerNote>
             )}
@@ -1252,3 +1293,16 @@ const TransportPage = () => {
 }
 
 export default TransportPage
+
+// Opt out of static generation. Next.js 13's i18n + Pages Router
+// auto-static-optimization has a long-standing bug where the export
+// finalize step expects '.next/export/is/transport.html' but never
+// writes it (the default locale + non-default locale dedupe step
+// collapses the HTML when the page renders identically up front).
+// Symptom: build fails with ENOENT on rename in build/index.js:1450.
+// getServerSideProps forces SSR per request, bypassing the export
+// pipeline entirely. Trivial perf cost — the page returns no
+// server-side data; this is purely to dodge the build bug.
+export async function getServerSideProps() {
+  return { props: {} }
+}

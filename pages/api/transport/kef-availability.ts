@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
 import { FALLBACK_TRANSPORT_PRICING } from '../../../common/transportConstants'
+import type { KefAvailability, KefDriverWindow } from '../../../common/transportTypes'
 
 // Returns the raw KEF activity on a given date so the client can resolve the
 // final pickup mode using the customer's flight landing time. The mode
@@ -20,18 +21,9 @@ import { FALLBACK_TRANSPORT_PRICING } from '../../../common/transportConstants'
 //
 // `inLockerSeason` is still returned for diagnostic / future use, but the
 // client no longer gates the locker option on it.
-export type KefDriverWindow = {
-  startHour: number // 0–23.99, decimal so 06:30 = 6.5
-  endHour: number
-  label: string // raw Tímasetning string, useful for debugging
-}
-
-export type KefAvailability = {
-  driverWindows: KefDriverWindow[]
-  lockersInUse: number
-  lockerCapacity: number
-  inLockerSeason: boolean
-}
+// KefAvailability + KefDriverWindow live in common/transportTypes.ts so
+// client code can import them without pulling this server module's
+// dependencies through Next.js's bundler graph.
 
 const validateDate = (s: unknown): string | null => {
   if (typeof s !== 'string') return null

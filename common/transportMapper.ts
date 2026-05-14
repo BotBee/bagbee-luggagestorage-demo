@@ -103,9 +103,13 @@ const renderComments = (booking: TransportBooking, locale: string): string => {
 
 const toYmd = (iso: string | null): string => {
   if (!iso) return ''
-  // Already YYYY-MM-DD; convert dashes to slashes to match the existing
-  // Airtable column format used by the check-in flow (`YYYY/MM/DD`).
-  return iso.replace(/-/g, '/')
+  // Pass YYYY-MM-DD straight through. We *don't* convert to slashes here
+  // even though the check-in flow does — because we use Airtable's
+  // typecast=true on create (needed for auto-generated time-window
+  // options), and typecast+slashes hits a parser bug where "2026/05/20"
+  // gets stored as "2020-05-20" (the day digits leak into the year).
+  // ISO dashes are unambiguous and avoid the bug entirely.
+  return iso
 }
 
 export const mapTransportToOrder = (
@@ -210,7 +214,10 @@ export const mapTransportToPayment = (
   const isLocalhost = /^(localhost|127\.\d+\.\d+\.\d+)(:\d+)?$/.test(host)
   const base = isLocalhost ? 'https://www.bagbee.is' : `https://${host}`
   const completeUrl = `${base}/${locale}/orders/${recordId.slice(-5)}?paid=true`
-  const cancelUrl = `${base}/${locale}/payment/cancel?recordId=${recordId}&type=baggage`
+  // service=transport hints to /payment/cancel that 'Start over' should
+  // go back to /transport, not /book. recordId+type drive the existing
+  // 'Retry payment' button — no form refill needed on failed payment.
+  const cancelUrl = `${base}/${locale}/payment/cancel?recordId=${recordId}&type=baggage&service=transport`
   return {
     amount: totalAmount,
     currency: 'ISK',

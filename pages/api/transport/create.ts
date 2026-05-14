@@ -1,11 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { isValidPhoneNumber, parsePhoneNumberWithError } from 'libphonenumber-js'
 import { AirtableTransportOrder } from '../../../common/transportMapper'
 import { getBase, getMinifiedItem, getTable } from '../../../utils/airtable'
 
-// Server-side phone validation. We import lazily to avoid the bundle cost on
-// the rest of the app — this endpoint is server-only.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { parsePhoneNumberWithError, isValidPhoneNumber } = require('libphonenumber-js') as typeof import('libphonenumber-js')
+// Server-side only. libphonenumber-js is fine to import normally here —
+// Next.js API routes are never bundled into the client.
 
 // Endpoint contract:
 //   { order: AirtableTransportOrder, pickupZip?: string, deliveryZip?: string }

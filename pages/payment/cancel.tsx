@@ -68,6 +68,13 @@ const Cancel = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>) 
   const recordId = typeof recordIdParam === 'string' ? recordIdParam : undefined
   const typeParam = router.query.type
   const tableType: TableType = isValidType(typeParam) ? typeParam : 'baggage'
+  // service=transport tells us this booking originated from the new
+  // /transport flow rather than the check-in /book flow. Used to route the
+  // 'Start over' link to the correct wizard so the customer doesn't land
+  // on a totally different product when they wanted to restart their
+  // transport booking.
+  const serviceParam = router.query.service
+  const startOverHref = serviceParam === 'transport' ? '/transport' : '/book'
 
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
@@ -121,10 +128,10 @@ const Cancel = ({ navigation }: InferGetStaticPropsType<typeof getStaticProps>) 
               <Button onClick={handleRetry} loading={retrying} disabled={retrying} fullWidth>
                 {t.cancelStep.retryButton}
               </Button>
-              <SecondaryLink href='/book'>{t.cancelStep.startOverButton}</SecondaryLink>
+              <SecondaryLink href={startOverHref}>{t.cancelStep.startOverButton}</SecondaryLink>
             </>
           ) : (
-            <Link href='/book'>
+            <Link href={startOverHref}>
               <Button fullWidth>{t.cancelStep.backToBookingButton}</Button>
             </Link>
           )}
