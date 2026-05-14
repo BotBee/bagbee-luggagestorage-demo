@@ -18,6 +18,8 @@ const TopBar = styled.header`
   border-bottom: 1px solid #e5e6eb;
 `
 
+const MOBILE = '720px'
+
 const TopBarInner = styled.div`
   max-width: 1280px;
   margin: 0 auto;
@@ -26,12 +28,20 @@ const TopBarInner = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  @media (max-width: ${MOBILE}) {
+    padding: 10px 14px;
+    gap: 8px;
+  }
 `
 
 const Brand = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  @media (max-width: ${MOBILE}) {
+    gap: 8px;
+  }
 `
 
 const BrandLogo = styled.div`
@@ -47,6 +57,13 @@ const BrandLogo = styled.div`
   font-family: 'Poppins', sans-serif;
   letter-spacing: -0.5px;
   font-size: 16px;
+  flex-shrink: 0;
+  @media (max-width: ${MOBILE}) {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+    border-radius: 9px;
+  }
 `
 
 const BrandText = styled.div`
@@ -54,17 +71,26 @@ const BrandText = styled.div`
   flex-direction: column;
   line-height: 1.1;
   font-family: 'Poppins', sans-serif;
+  min-width: 0;
 `
 
 const BrandTitle = styled.div`
   font-size: 15px;
   font-weight: 700;
   color: #000929;
+  white-space: nowrap;
+  @media (max-width: ${MOBILE}) {
+    font-size: 13px;
+  }
 `
 
 const BrandSubtitle = styled.div`
   font-size: 11px;
   color: #696f79;
+  white-space: nowrap;
+  @media (max-width: ${MOBILE}) {
+    display: none;
+  }
 `
 
 const Nav = styled.nav`
@@ -72,6 +98,10 @@ const Nav = styled.nav`
   align-items: center;
   gap: 8px;
   font-family: 'Poppins', sans-serif;
+  flex-shrink: 0;
+  @media (max-width: ${MOBILE}) {
+    gap: 4px;
+  }
 `
 
 const NavLink = styled(Link, {
@@ -85,8 +115,13 @@ const NavLink = styled(Link, {
   color: ${({ isActive }) => (isActive ? 'white' : '#000929')};
   background: ${({ isActive }) => (isActive ? '#3d7165' : 'transparent')};
   transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
   &:hover {
     background: ${({ isActive }) => (isActive ? '#345f55' : '#e9eef3')};
+  }
+  @media (max-width: ${MOBILE}) {
+    font-size: 12px;
+    padding: 6px 10px;
   }
 `
 
@@ -99,9 +134,14 @@ const LogoutButton = styled.button`
   color: #696f79;
   border: 1px solid #e5e6eb;
   cursor: pointer;
+  white-space: nowrap;
   &:hover {
     background: #f5f6fa;
     color: #000929;
+  }
+  @media (max-width: ${MOBILE}) {
+    font-size: 11px;
+    padding: 6px 10px;
   }
 `
 
@@ -109,6 +149,9 @@ const Content = styled.main`
   max-width: 1280px;
   margin: 0 auto;
   padding: 32px 24px;
+  @media (max-width: ${MOBILE}) {
+    padding: 16px 14px;
+  }
 `
 
 const Footer = styled.footer`

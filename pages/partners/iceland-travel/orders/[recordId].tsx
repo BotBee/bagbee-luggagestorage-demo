@@ -115,6 +115,11 @@ const Field = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 12px;
+  /* Narrow viewports (phones) — stack the two fields so neither input is
+     squished. Matches the layout grid's 900px breakpoint above. */
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 const Label = styled.label`
