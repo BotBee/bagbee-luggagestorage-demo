@@ -49,9 +49,19 @@ export type AirtableTransportOrder = {
 }
 
 // Render a leg's location as a human-readable string for `Heimilisfang` /
-// `Delivery Address`. Includes the structured info that location implies
-// (hotel name, street + zip, flight number, cruise ship) so the dispatch
-// team doesn't need to chase down 5 different fields.
+// `Delivery Address`. Two render paths:
+//   1. Locations with a real street address (hotel pickup/delivery,
+//      manual-address): just return the Google-formatted address. If a hotel
+//      name is set, prefix it on its own line so the dispatcher (and the
+//      customer-facing /orders/{code} page) see a clean two-line block:
+//          101 Hotel
+//          Hverfisgata 10, 101 Reykjavík, Iceland
+//      We deliberately don't repeat the user-entered zip — Google's
+//      formatted_address already includes it; concatenating once more gave
+//      us strings like "...Iceland, 101" which the operator flagged as ugly.
+//   2. Locations without a street address (KEF, BSI, cruise terminals):
+//      build a label-led descriptor that Google can geocode for the
+//      tracking-page map and carries flight / cruise metadata.
 const renderLocation = (
   loc: TransportBooking['pickupLocation'],
   address: TransportBooking['pickupAddress'],
@@ -61,12 +71,13 @@ const renderLocation = (
 ): string => {
   if (!loc) return ''
   const meta = findLocation(loc)
-  const parts: string[] = [meta?.label.en ?? loc]
-  if (meta?.requiresHotelName && hotelName) parts.push(hotelName)
   if (meta?.requiresAddress && address.street) {
-    const addr = [address.street, address.zip].filter(Boolean).join(', ')
-    if (addr) parts.push(addr)
+    if (meta.requiresHotelName && hotelName) {
+      return `${hotelName}\n${address.street}`
+    }
+    return address.street
   }
+  const parts: string[] = [meta?.label.en ?? loc]
   if (meta?.requiresCruiseShipName && cruiseShip) parts.push(`Cruise: ${cruiseShip}`)
   if (meta?.requiresFlightNumber && flightNumber) parts.push(`Flight: ${flightNumber}`)
   return parts.join(' — ')

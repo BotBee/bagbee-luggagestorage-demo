@@ -178,6 +178,10 @@ const DetailValue = styled.span`
   font-size: 14px;
   font-weight: 500;
   color: #000929;
+  /* Honor embedded newlines (hotel name on line 1, address on line 2) without
+     forcing the column wider — pre-wrap collapses spaces normally but renders
+     \n as a visible line break. */
+  white-space: pre-wrap;
 `
 
 const MapContainer = styled.div`
@@ -193,6 +197,8 @@ const AddressText = styled.p`
   font-size: 14px;
   color: #696f79;
   margin-top: 8px;
+  /* Hotel name on top line, street on next — same rationale as DetailValue. */
+  white-space: pre-wrap;
 `
 
 const PhotoGrid = styled.div`
@@ -930,16 +936,41 @@ const OrderPage = ({
   const showMap = isPickupDelivery ? true : (isDelivered || isPlanned)
   const showPickupOnMap = isPickupDelivery ? isBeforePickup : isPlanned
 
+  // Transport bookings now write the address as a possibly-two-line string —
+  // "Hotel name\nStreet, City, Country" when the leg is a hotel, or just
+  // "Street, City, Country" otherwise. For the Google Maps embed query we
+  // want the actual street line (Google geocodes brand names like '101
+  // Hotel' to a generic place, but '101 Hotel\nHverfisgata 10' geocodes
+  // cleanly because the comma-joined version is a real address).
+  // For DISPLAY (the AddressText below the map), we keep both lines.
+  const flattenForGeocode = (s: string): string =>
+    s
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(', ')
+
   const mapAddress = showPickupOnMap
     ? pickupAddress
     : deliveryAddress || pickupAddress
   const displayMapAddress = showPickupOnMap
-    ? (hotelName ? `${hotelName}, ${pickupAddress}` : pickupAddress)
-    : (deliveryAddress || (hotelName ? `${hotelName}, ${pickupAddress}` : pickupAddress))
+    ? pickupAddress
+    : (deliveryAddress || pickupAddress)
+  // Older bookings (pre-2026-05-14) stored a single-line "Hotel delivery —
+  // 101 Hotel — ..." string with the leg's hotel name already inline, AND
+  // duplicated the hotel name into `Hótel Nafn`. New bookings keep the
+  // address line clean and rely on `Hótel Nafn` for the hotel signal. The
+  // legacy prepend (` ${hotelName}, ${pickupAddress}` ) is what was causing
+  // KEF → Hotel pickups to geocode to the hotel — dropped here.
   const mapHeading = showPickupOnMap ? t.pickupLocationTitle : t.deliveryLocationTitle
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-  const encodedAddress = encodeURIComponent(displayMapAddress || 'Keflavik Airport, Iceland')
+  // Geocode query: Google handles "Hotel name, Street" better than a literal
+  // newline. flattenForGeocode reduces "Hotel name\nStreet" to a single
+  // comma-joined line that the embed URL can encode safely.
+  const encodedAddress = encodeURIComponent(
+    flattenForGeocode(displayMapAddress) || 'Keflavik Airport, Iceland',
+  )
   // KEF terminal — Google's geocoded pin for "Flugstöð" lands slightly off; this
   // is the actual baggage-arrivals door we want the customer to see.
   const isFlugstodAddress = /flugst[öo]ð/i.test(displayMapAddress || '')

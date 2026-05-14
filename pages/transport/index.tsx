@@ -93,6 +93,10 @@ const COPY = {
       location: 'Location',
       time: 'Time window',
       street: 'Street name and number',
+      // Combined label for the single Google Places input on hotel legs —
+      // the postal code + hotel name fields were dropped because Google's
+      // autocomplete supplies both.
+      hotelOrAddress: 'Hotel name or address',
       zip: 'Zip / postal code',
       hotelName: 'Hotel name',
       flightNumberArrival: 'Arrival flight number',
@@ -113,7 +117,8 @@ const COPY = {
       chooseLocation: 'Choose a location',
       chooseTime: 'Choose a time window',
       bags: '3',
-      street: '101 Hotel',
+      street: 'Hverfisgata 10',
+      hotelOrAddress: 'Start typing your hotel name or address…',
       zip: '101',
       hotelName: '101 Hotel',
       flight: 'FI544',
@@ -175,6 +180,7 @@ const COPY = {
       location: 'Staðsetning',
       time: 'Tímabil',
       street: 'Götuheiti og númer',
+      hotelOrAddress: 'Nafn hótels eða heimilisfang',
       zip: 'Póstnúmer',
       hotelName: 'Nafn hótels',
       flightNumberArrival: 'Komuflugnúmer',
@@ -195,7 +201,8 @@ const COPY = {
       chooseLocation: 'Veldu staðsetningu',
       chooseTime: 'Veldu tímabil',
       bags: '3',
-      street: '101 Hotel',
+      street: 'Hverfisgata 10',
+      hotelOrAddress: 'Sláðu inn nafn hótels eða heimilisfang…',
       zip: '101',
       hotelName: '101 Hotel',
       flight: 'FI544',
@@ -955,52 +962,38 @@ const TransportPage = () => {
           </Field>
         )}
         {meta.requiresAddress && (
-          <>
-            <Field>
-              <span>{t.fields.street}</span>
-              {/* For manual-address legs we use Google Places autocomplete:
-                  it propagates the canonical formatted address AND the
-                  postcode in one go, which gives the server's postal-code-
-                  service check accurate data. Hotel addresses also flow
-                  through this — customer can still type free-text, or pick
-                  a suggestion, either works. */}
-              <PlaceAutocompleteInput
-                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ''}
-                placeholder={t.placeholders.street}
-                initialValue={addr.street}
-                onPlaceSelect={(address, _placeName, postalCode) => {
-                  // Google's postcode wins when provided; otherwise keep
-                  // whatever the customer had typed in the zip field.
-                  setAddr({
-                    street: address,
-                    zip: postalCode || addr.zip,
-                  })
-                }}
-              />
-            </Field>
-            <Field>
-              <span>{t.fields.zip}</span>
-              <TextInput
-                type="text"
-                placeholder={t.placeholders.zip}
-                value={addr.zip}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setAddr({ zip: e.target.value })
-                }
-              />
-            </Field>
-          </>
-        )}
-        {meta.requiresHotelName && (
           <Field>
-            <span>{t.fields.hotelName}</span>
-            <TextInput
-              type="text"
-              placeholder={t.placeholders.hotelName}
-              value={addr.hotelName}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setAddr({ hotelName: e.target.value })
+            <span>
+              {meta.requiresHotelName ? t.fields.hotelOrAddress : t.fields.street}
+            </span>
+            {/* Single Google Places input handles three responsibilities so we
+                don't need the separate Postal code / Hotel name fields any
+                more: (1) canonical formatted address (already includes
+                zip/city/country); (2) postal code parsed out of address
+                components so the server-side serviced-area check fires
+                accurately; (3) place displayName, which is the hotel name
+                when the customer picks a hotel from the suggestions. */}
+            <PlaceAutocompleteInput
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ''}
+              placeholder={
+                meta.requiresHotelName
+                  ? t.placeholders.hotelOrAddress
+                  : t.placeholders.street
               }
+              initialValue={addr.street}
+              onPlaceSelect={(address, placeName, postalCode) => {
+                setAddr({
+                  street: address,
+                  // Google's postcode wins when provided; otherwise keep
+                  // whatever was there (likely empty — server will reject
+                  // unserviced-area bookings with a clear message).
+                  zip: postalCode || addr.zip,
+                  // For hotel legs, Google's displayName is the hotel name
+                  // (e.g. '101 Hotel'). For manual-address legs, placeName
+                  // mirrors the formatted address — ignore it there.
+                  hotelName: meta.requiresHotelName ? placeName : addr.hotelName,
+                })
+              }}
             />
           </Field>
         )}
