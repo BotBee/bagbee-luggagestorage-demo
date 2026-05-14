@@ -53,13 +53,18 @@ const COPY = {
     sections: {
       dates: 'When?',
       bags: 'How many bags?',
-      pickup: 'Pick-up',
+      // Customer-perspective labels: from the customer's view they are
+      // 'dropping off' their bags with BagBee, and BagBee 'delivers' them
+      // to the destination. Internal Airtable fields keep operational
+      // names (Tímasetning, Heimilisfang etc.) so downstream tools and
+      // the /orders/{code} tracking page are unaffected.
+      pickup: 'Drop-off',
       delivery: 'Delivery',
       contact: 'Your details',
       summary: 'Summary',
     },
     fields: {
-      pickupDate: 'Pick-up date',
+      pickupDate: 'Drop-off date',
       deliveryDate: 'Delivery date',
       selectDate: 'Select date',
       bsiLockerNote:
@@ -128,7 +133,7 @@ const COPY = {
       vatPortion: 'VAT included',
     },
     submit: 'Proceed to payment',
-    notReady: 'Fill in pick-up, delivery, dates and bags to see your price.',
+    notReady: 'Fill in drop-off, delivery, dates and bags to see your price.',
   },
   is: {
     seoTitle: 'BagBee | Töskuflutningur og geymsla',
@@ -138,14 +143,14 @@ const COPY = {
     sections: {
       dates: 'Hvenær?',
       bags: 'Hversu margar töskur?',
-      pickup: 'Sótt',
-      delivery: 'Afhent',
+      pickup: 'Skil',
+      delivery: 'Afhending',
       contact: 'Þínar upplýsingar',
       summary: 'Yfirlit',
     },
     fields: {
-      pickupDate: 'Dagsetning sótt',
-      deliveryDate: 'Dagsetning afhent',
+      pickupDate: 'Dagsetning skila',
+      deliveryDate: 'Dagsetning afhendingar',
       selectDate: 'Veldu dagsetningu',
       bsiLockerNote:
         'Eftir kl. 17:00 er afgreiðsla á BSÍ lokuð. Við sendum þér PIN-númer og lyklageymslunúmer í tölvupósti svo þú getur skilið eftir / sótt töskurnar í lyklageymslunni á BSÍ á þeim tíma sem hentar.',
@@ -210,7 +215,7 @@ const COPY = {
       vatPortion: 'Vsk innifalið',
     },
     submit: 'Áfram að greiðslu',
-    notReady: 'Veldu sótt, afhent, dagsetningar og fjölda taska til að sjá verð.',
+    notReady: 'Veldu skil, afhendingu, dagsetningar og fjölda taska til að sjá verð.',
   },
 }
 
@@ -442,11 +447,19 @@ const DateChipValue = styled.div<{ $placeholder?: boolean }>`
   color: ${({ $placeholder }) => ($placeholder ? '#9CA3AF' : '#12141d')};
 `
 
+// Framed card around the +/- stepper. The bag count is one of the core
+// inputs that drives the live price, so we give it a slightly heavier visual
+// footprint than the surrounding fields without going full hero-treatment.
 const BagStepper = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  padding: 6px 10px;
+  gap: 18px;
+  padding: 10px 18px;
+  border: 1px solid #e6e9ee;
+  border-radius: 10px;
+  background: #fbfbfd;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  width: fit-content;
 `
 
 const StepperButton = styled.button`
