@@ -197,10 +197,10 @@ export const DriverMessageBar = ({ driverPhone, driverName }: Props) => {
       <Wrapper>
         <ToggleRow>
           <ToggleButton primary onClick={() => setMode('message')}>
-            💬 Message {firstNameOf(driverName)}
+            Message {firstNameOf(driverName)}
           </ToggleButton>
           <ToggleButton onClick={() => setMode('share')}>
-            🔗 Share driver info
+            Share driver info
           </ToggleButton>
         </ToggleRow>
       </Wrapper>

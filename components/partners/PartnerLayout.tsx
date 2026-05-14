@@ -45,24 +45,24 @@ const Brand = styled.div`
 `
 
 const BrandLogo = styled.div`
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  background: linear-gradient(135deg, #3d7165 0%, #20c933 100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #3d7165;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 800;
+  font-weight: 700;
   font-family: 'Poppins', sans-serif;
-  letter-spacing: -0.5px;
-  font-size: 16px;
+  letter-spacing: -0.3px;
+  font-size: 14px;
   flex-shrink: 0;
   @media (max-width: ${MOBILE}) {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+    border-radius: 7px;
   }
 `
 
@@ -210,10 +210,7 @@ export const PartnerLayout = ({
         </TopBarInner>
       </TopBar>
       <Content>{children}</Content>
-      <Footer>
-        Invoice-business orders are billed after delivery. Edits are sent to BagBee
-        instantly. Questions? bagbee@bagbee.is
-      </Footer>
+      <Footer>bagbee@bagbee.is</Footer>
     </Wrapper>
   )
 }

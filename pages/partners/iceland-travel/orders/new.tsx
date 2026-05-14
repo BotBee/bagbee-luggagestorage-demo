@@ -49,12 +49,7 @@ const Sub = styled.p`
 `
 
 const Layout = styled.div`
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
+  max-width: 760px;
 `
 
 const Card = styled.section`
@@ -139,28 +134,10 @@ const Toast = styled.div<{ kind: 'ok' | 'err' }>`
   color: ${({ kind }) => (kind === 'ok' ? '#176c2c' : '#b3261e')};
 `
 
-const InfoCallout = styled.div`
-  background: linear-gradient(135deg, #f0f8f4 0%, #e3f3ec 100%);
-  border-radius: 14px;
-  padding: 18px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  color: #2d5d52;
-  line-height: 1.6;
-  border: 1px solid #cfe8d8;
-  strong { color: #1d5e57; }
-`
-
 const SERVICE_OPTIONS = [
-  'Pickup',
   'Pickup & Delivery',
-  'Delivery',
   'Check-in service',
-  'Arrival service',
-  'Pickup from KEF',
-  'Delivery from storage',
   'BSI to Hotel Delivery',
-  'Task',
 ]
 
 const TIME_WINDOWS = [
@@ -207,7 +184,7 @@ const initial: Form = {
   reference: '',
   email: 'karolina.k@icelandtravel.is',
   phone: '',
-  serviceType: 'Pickup',
+  serviceType: 'Pickup & Delivery',
   flightDate: '',
   pickupDate: '',
   timeWindow: '',
@@ -521,21 +498,6 @@ export default function NewPartnerOrder({ partnerDisplayName }: Props) {
           </form>
         </Card>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <InfoCallout>
-            <strong>Invoice billing</strong>
-            <br />
-            Bookings submitted here are flagged as <em>Reikningsviðskipti</em> in
-            BagBee&rsquo;s system. You will be invoiced after the trip is delivered.
-            Final amount may differ from any estimate you provide.
-          </InfoCallout>
-          <InfoCallout>
-            <strong>Need to change something later?</strong>
-            <br />
-            You can edit the order any time from the dashboard until ops set it to
-            &ldquo;In Progress&rdquo;. Edits notify the team automatically.
-          </InfoCallout>
-        </div>
       </Layout>
     </PartnerLayout>
   )

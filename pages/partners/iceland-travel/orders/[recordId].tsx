@@ -686,7 +686,7 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
                             fontWeight: 600,
                           }}
                         >
-                          📞 {original.driverPhone}
+                          {original.driverPhone}
                         </a>
                       </KVValue>
                     </KV>
@@ -720,7 +720,7 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
                       fontWeight: 600,
                     }}
                   >
-                    🗺️ Open OptimoRoute tracking
+                    Open OptimoRoute tracking
                   </a>
                 )}
               </>
@@ -736,10 +736,7 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
                   lineHeight: 1.5,
                 }}
               >
-                <strong>No driver assigned yet.</strong>
-                <br />
-                BagBee dispatch will schedule a driver as the date approaches.
-                You&rsquo;ll see their name and phone here once assigned.
+                No driver assigned yet.
               </div>
             )}
           </Card>
@@ -790,22 +787,6 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
             </KV>
           </Card>
 
-          <Card>
-            <CardTitle>How edits work</CardTitle>
-            <p
-              style={{
-                fontFamily: 'Poppins, sans-serif',
-                fontSize: 12,
-                color: '#696f79',
-                lineHeight: 1.6,
-                margin: 0,
-              }}
-            >
-              Saving an edit immediately writes to BagBee&rsquo;s system and triggers
-              an internal notification with a timestamped changelog. There&rsquo;s
-              no need to email ops separately.
-            </p>
-          </Card>
         </div>
       </Layout>
     </PartnerLayout>

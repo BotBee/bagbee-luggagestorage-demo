@@ -17,31 +17,31 @@ const Page = styled.div`
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #00231f 0%, #0a4a3f 50%, #1d5e57 100%);
+  background: #f5f6fa;
   padding: 24px;
 `
 
 const Card = styled.div`
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   background: white;
-  border-radius: 24px;
-  padding: 40px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+  border: 1px solid #ecedf0;
+  border-radius: 12px;
+  padding: 32px;
 `
 
 const Logo = styled.div`
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #3d7165 0%, #20c933 100%);
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #3d7165;
   color: white;
   display: grid;
   place-items: center;
   font-family: 'Poppins', sans-serif;
-  font-weight: 800;
-  font-size: 22px;
-  margin-bottom: 20px;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 16px;
 `
 
 const Title = styled.h1`

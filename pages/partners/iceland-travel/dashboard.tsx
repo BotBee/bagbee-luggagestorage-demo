@@ -58,73 +58,57 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   }
 }
 
-const Hero = styled.section`
-  margin-bottom: 24px;
-`
-
-const HeroTitle = styled.h1`
-  font-family: 'Poppins', sans-serif;
-  font-size: 30px;
-  font-weight: 700;
-  color: #000929;
-  margin: 0 0 4px;
-  letter-spacing: -0.5px;
-`
-
-const HeroSub = styled.p`
-  font-family: 'Poppins', sans-serif;
-  font-size: 14px;
-  color: #696f79;
-  margin: 0;
-`
-
 const KpiGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  margin: 22px 0 32px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
 `
 
-const KpiCard = styled.div<{ accent?: string }>`
+const KpiCard = styled.div`
   background: white;
-  border-radius: 18px;
-  padding: 18px 20px;
+  border-radius: 10px;
+  padding: 14px 16px;
   border: 1px solid #ecedf0;
-  position: relative;
-  overflow: hidden;
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: ${({ accent }) => accent || '#3d7165'};
+  @media (max-width: 720px) {
+    padding: 10px 10px;
   }
 `
 
 const KpiLabel = styled.div`
   font-family: 'Poppins', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: #696f79;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  @media (max-width: 720px) {
+    font-size: 11px;
+  }
 `
 
 const KpiValue = styled.div`
   font-family: 'Poppins', sans-serif;
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
   color: #000929;
-  margin-top: 6px;
-  letter-spacing: -0.5px;
-  line-height: 1.05;
+  margin-top: 4px;
+  line-height: 1.1;
+  @media (max-width: 720px) {
+    font-size: 20px;
+  }
 `
 
 const KpiSub = styled.div`
   font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  color: #696f79;
-  margin-top: 4px;
+  font-size: 11px;
+  color: #a3a4a7;
+  margin-top: 2px;
+  @media (max-width: 720px) {
+    font-size: 10px;
+  }
 `
 
 const SectionHead = styled.div`
@@ -187,7 +171,7 @@ const MOBILE_BREAKPOINT = '720px'
 
 const TableCard = styled.div`
   background: white;
-  border-radius: 18px;
+  border-radius: 10px;
   border: 1px solid #ecedf0;
   overflow: hidden;
 `
@@ -467,19 +451,6 @@ export default function PartnerDashboard({
   const [filter, setFilter] = useState<StatusFilter>('upcoming')
   const [query, setQuery] = useState('')
 
-  // Client-only today string — avoids hydration mismatch on locale formatting.
-  const [today, setToday] = useState<string>('')
-  useEffect(() => {
-    setToday(
-      new Date().toLocaleDateString('en-GB', {
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
-    )
-  }, [])
-
   // Background refresh so dispatcher status changes show up automatically.
   useEffect(() => {
     const id = setInterval(async () => {
@@ -525,32 +496,23 @@ export default function PartnerDashboard({
 
   return (
     <PartnerLayout partnerDisplayName={partnerDisplayName}>
-      <Hero>
-        <HeroTitle>Welcome back, {partnerDisplayName}</HeroTitle>
-        <HeroSub>
-          {today ? `${today} · ` : ''}dispatcher view for your bookings with BagBee
-        </HeroSub>
-      </Hero>
-
       <KpiGrid>
-        <KpiCard accent="#3d7165">
-          <KpiLabel>Upcoming pickups</KpiLabel>
+        <KpiCard>
+          <KpiLabel>Next 7 days</KpiLabel>
           <KpiValue>{kpis.next7dCount}</KpiValue>
-          <KpiSub>
-            in the next 7 days · {kpis.upcomingTotal} future orders total
-          </KpiSub>
+          <KpiSub>{kpis.upcomingTotal} future orders</KpiSub>
         </KpiCard>
-        <KpiCard accent="#fcb400">
+        <KpiCard>
           <KpiLabel>Today</KpiLabel>
           <KpiValue>{kpis.todayCount}</KpiValue>
           <KpiSub>
-            {kpis.todayBags} bag{kpis.todayBags === 1 ? '' : 's'} scheduled today
+            {kpis.todayBags} bag{kpis.todayBags === 1 ? '' : 's'}
           </KpiSub>
         </KpiCard>
-        <KpiCard accent="#2d7ff9">
+        <KpiCard>
           <KpiLabel>In progress</KpiLabel>
           <KpiValue>{kpis.inProgress}</KpiValue>
-          <KpiSub>orders being run right now</KpiSub>
+          <KpiSub>currently running</KpiSub>
         </KpiCard>
       </KpiGrid>
 
@@ -669,7 +631,7 @@ export default function PartnerDashboard({
                     </Td>
                     <Td data-label="Bags">
                       <Bag>
-                        <span aria-hidden>🧳</span> {total}
+                        {total} bag{total === 1 ? '' : 's'}
                         {o.bagsOdd > 0 ? ` (${o.bagsOdd} odd)` : ''}
                       </Bag>
                     </Td>
@@ -679,14 +641,14 @@ export default function PartnerDashboard({
                           <DriverName>{o.driverName}</DriverName>
                           {o.driverPhone ? (
                             <PhoneLink href={`tel:${o.driverPhone}`}>
-                              📞 {o.driverPhone}
+                              {o.driverPhone}
                             </PhoneLink>
                           ) : (
                             <Muted>no phone on file</Muted>
                           )}
                         </Driver>
                       ) : (
-                        <Unassigned>Awaiting</Unassigned>
+                        <Unassigned>Unassigned</Unassigned>
                       )}
                     </Td>
                     <Td data-label="Status">
@@ -703,7 +665,7 @@ export default function PartnerDashboard({
                           onClick={(e) => e.stopPropagation()}
                           title="Open OptimoRoute tracking"
                         >
-                          🗺️ Track
+                          Track
                         </TrackLink>
                       )}
                     </Td>
