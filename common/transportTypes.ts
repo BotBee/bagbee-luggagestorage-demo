@@ -43,8 +43,13 @@ export type TransportTimeSlot = {
   sortOrder: number
   // If set, the slot is only offered for delivery legs whose location is
   // in this list. Used for the afternoon 14:00–15:00 window which only
-  // makes sense for hotel + cruise terminal deliveries.
+  // makes sense for hotel deliveries.
   restrictDeliveryToLocations?: LocationKind[]
+  // Same idea but for pickup legs. Used for the evening hourly slots
+  // (17:00–21:00) which we only offer at the three cruise terminals —
+  // ships often disembark late, but BagBee doesn't otherwise run an
+  // evening collection route from hotels / KEF / manual addresses.
+  restrictPickupToLocations?: LocationKind[]
 }
 
 export type TransportAddress = {

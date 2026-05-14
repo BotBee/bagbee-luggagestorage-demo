@@ -133,12 +133,11 @@ export const TRANSPORT_TIME_SLOTS: TransportTimeSlot[] = [
   { value: '10:00 - 11:00', category: 'morning', isFlexible: false, availableForPickup: true, availableForDelivery: true, sortOrder: 50 },
   { value: '11:00 - 12:00', category: 'morning', isFlexible: false, availableForPickup: true, availableForDelivery: true, sortOrder: 60 },
 
-  // Afternoon delivery slot — only offered for hotels and cruise terminals.
-  // The Skarfabakki/Miðbakki/Kornagarðar piers don't board passengers until
-  // mid-afternoon, and hotels happily take bags in. Restricted via
-  // restrictDeliveryToLocations so this slot doesn't appear for KEF or BSÍ
-  // delivery (where it'd be misleading — KEF check-in cutoffs differ;
-  // BSÍ has its own slot set).
+  // Afternoon delivery slot — only offered for hotel deliveries. Cruise
+  // terminals were previously included, but per operator feedback the
+  // harbor flow needs evening hourly slots instead (cruise ships often
+  // depart in the evening; bags need to be at the terminal by then).
+  // Hotels happily take afternoon deliveries in to reception.
   {
     value: '14:00 - 15:00',
     category: 'morning', // category-naming wart; this is just an afternoon slot
@@ -146,12 +145,7 @@ export const TRANSPORT_TIME_SLOTS: TransportTimeSlot[] = [
     availableForPickup: false,
     availableForDelivery: true,
     sortOrder: 70,
-    restrictDeliveryToLocations: [
-      'hotel-delivery',
-      'cruise-skarfabakki',
-      'cruise-midbakki',
-      'cruise-kornargardar',
-    ],
+    restrictDeliveryToLocations: ['hotel-delivery'],
   },
 
   // Evening flex — both legs
@@ -163,11 +157,46 @@ export const TRANSPORT_TIME_SLOTS: TransportTimeSlot[] = [
     availableForDelivery: true,
     sortOrder: 100,
   },
-  // Evening hourly — delivery only (pickup doesn't currently expose these)
-  { value: '17:00 - 18:00', category: 'evening', isFlexible: false, availableForPickup: false, availableForDelivery: true, sortOrder: 110 },
-  { value: '18:00 - 19:00', category: 'evening', isFlexible: false, availableForPickup: false, availableForDelivery: true, sortOrder: 120 },
-  { value: '19:00 - 20:00', category: 'evening', isFlexible: false, availableForPickup: false, availableForDelivery: true, sortOrder: 130 },
-  { value: '20:00 - 21:00', category: 'evening', isFlexible: false, availableForPickup: false, availableForDelivery: true, sortOrder: 140 },
+  // Evening hourly — delivery: available everywhere (existing behaviour).
+  // Pickup: only at the three cruise terminals (cruise ships often
+  // disembark late; hotels/KEF/manual addresses don't generate evening
+  // pickup runs). Restricted via restrictPickupToLocations.
+  {
+    value: '17:00 - 18:00',
+    category: 'evening',
+    isFlexible: false,
+    availableForPickup: true,
+    availableForDelivery: true,
+    sortOrder: 110,
+    restrictPickupToLocations: ['cruise-skarfabakki', 'cruise-midbakki', 'cruise-kornargardar'],
+  },
+  {
+    value: '18:00 - 19:00',
+    category: 'evening',
+    isFlexible: false,
+    availableForPickup: true,
+    availableForDelivery: true,
+    sortOrder: 120,
+    restrictPickupToLocations: ['cruise-skarfabakki', 'cruise-midbakki', 'cruise-kornargardar'],
+  },
+  {
+    value: '19:00 - 20:00',
+    category: 'evening',
+    isFlexible: false,
+    availableForPickup: true,
+    availableForDelivery: true,
+    sortOrder: 130,
+    restrictPickupToLocations: ['cruise-skarfabakki', 'cruise-midbakki', 'cruise-kornargardar'],
+  },
+  {
+    value: '20:00 - 21:00',
+    category: 'evening',
+    isFlexible: false,
+    availableForPickup: true,
+    availableForDelivery: true,
+    sortOrder: 140,
+    restrictPickupToLocations: ['cruise-skarfabakki', 'cruise-midbakki', 'cruise-kornargardar'],
+  },
 ]
 
 // BSI counter has its own opening hours (06:45–17:00 in Jun–Aug) plus an
@@ -268,11 +297,14 @@ export const minSameDayDeliveryHour = (
 // Time slot options for a given leg. Returns the BSI-specific slot set when
 // the leg is at BSÍ Flybus (its own opening hours + after-hours locker
 // option), and the regular morning/evening route slots otherwise. Slots
-// can also opt-in to specific delivery locations via
-// restrictDeliveryToLocations — used by the 14:00 afternoon slot which
-// only makes sense for hotels + cruise terminals. The `minStartHour`
-// option filters out slots starting earlier than the given hour (used
-// when KEF pickup makes morning same-day delivery physically impossible).
+// can opt-in to specific locations on either side:
+//   - restrictDeliveryToLocations narrows the slot to specific delivery
+//     locations (e.g. 14:00–15:00 is hotel-delivery only).
+//   - restrictPickupToLocations narrows the slot to specific pickup
+//     locations (e.g. 17:00–21:00 hourly slots are cruise-terminal only).
+// The `minStartHour` option filters out slots starting earlier than the
+// given hour (used when KEF pickup makes morning same-day delivery
+// physically impossible).
 export const timeSlotOptionsForLocation = (
   location: string | null | undefined,
   side: 'pickup' | 'delivery',
@@ -285,9 +317,13 @@ export const timeSlotOptionsForLocation = (
   return source
     .filter((s) => s[flag])
     .filter((s) => {
-      if (side !== 'delivery') return true
-      if (!s.restrictDeliveryToLocations) return true
-      return location ? s.restrictDeliveryToLocations.includes(location as any) : false
+      if (side === 'delivery') {
+        if (!s.restrictDeliveryToLocations) return true
+        return location ? s.restrictDeliveryToLocations.includes(location as any) : false
+      }
+      // pickup
+      if (!s.restrictPickupToLocations) return true
+      return location ? s.restrictPickupToLocations.includes(location as any) : false
     })
     .filter((s) => {
       if (minHour <= 0) return true

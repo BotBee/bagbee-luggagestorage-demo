@@ -68,7 +68,7 @@ const COPY = {
       deliveryDate: 'Delivery date',
       selectDate: 'Select date',
       bsiLockerNote:
-        'After 17:00 the BSÍ counter is closed. We’ll email you a PIN code and the locker number so you can drop off / pick up your luggage at the BSÍ luggage lockers any time.',
+        'After 17:00 the BSÍ counter is closed. Drop your bags in one of the BSÍ self-service luggage lockers on site, then email the locker number and PIN (or a photo of the ticket) to bagbee@bagbee.is. Heads-up: the on-site lockers charge a separate fee, payable at BSÍ.',
       bsiOpeningHoursNote:
         'Our counter is inside BSÍ next to the Flybus desk. Staffed daily 06:45 – 17:00.',
       timeWindow: 'Time window',
@@ -153,7 +153,7 @@ const COPY = {
       deliveryDate: 'Dagsetning afhendingar',
       selectDate: 'Veldu dagsetningu',
       bsiLockerNote:
-        'Eftir kl. 17:00 er afgreiðsla á BSÍ lokuð. Við sendum þér PIN-númer og lyklageymslunúmer í tölvupósti svo þú getur skilið eftir / sótt töskurnar í lyklageymslunni á BSÍ á þeim tíma sem hentar.',
+        'Eftir kl. 17:00 er afgreiðsla á BSÍ lokuð. Settu töskurnar í eina af sjálfsafgreiðslu farangursgeymslum BSÍ á staðnum og sendu okkur lyklageymslunúmerið og PIN-númerið (eða mynd af miðanum) á bagbee@bagbee.is. Athugaðu: farangursgeymslurnar á staðnum rukka aukagjald sem greitt er við BSÍ.',
       bsiOpeningHoursNote:
         'Afgreiðsla okkar er inni á BSÍ við hliðina á Flybus borðinu. Opin daglega 06:45 – 17:00.',
       timeWindow: 'Tímabil',
