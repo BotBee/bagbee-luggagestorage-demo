@@ -1,6 +1,18 @@
 /**
  * KEF locker-empty monitor — Vercel cron route.
  *
+ * STATUS 2026-05-15: NOT SCHEDULED in vercel.json. Re-add the entry below
+ * once the RemoteLock/TTLock PIN-push integration ships (utils/ttlock.ts +
+ * pages/api/lockers/sync.ts driving real PINs into the lockers). Without
+ * that, no `door_unlocked` events flow into Access Events and this monitor
+ * would alarm on every locker booking. The route is left fully wired so
+ * re-enabling is one-line: drop this block back into vercel.json crons:
+ *
+ *   { "path": "/api/cron/kef-locker-monitor", "schedule": "*\/30 * * * *" }
+ *
+ * Also flip both rows in `KEF Locker Operations Rules` to Active = true at
+ * the same time (left unchecked while integration is incomplete).
+ *
  * Runs every 30 minutes. For each shift defined in `KEF Locker Operations
  * Rules`, when the shift's pickup time + alarm offset has just passed (and
  * we haven't already alerted for this shift+date), audit it:

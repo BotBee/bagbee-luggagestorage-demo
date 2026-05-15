@@ -3,10 +3,6 @@
     {
       "path": "/api/lockers/sync",
       "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/kef-locker-monitor",
-      "schedule": "*/30 * * * *"
     }
   ]
 }
