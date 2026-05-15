@@ -162,8 +162,27 @@ export type KefDriverWindow = {
   label: string // raw Tímasetning string, useful for debugging
 }
 
+// Per-shift availability for the BagBee KEF locker flow. One entry per
+// active row in the `KEF Locker Operations Rules` Airtable table — Noon and
+// Evening today, but the rule table is editable so future winter / summer
+// schedule changes don't need a deploy. The client uses these to decide
+// whether the customer's landing time falls into a shift that still has
+// locker capacity left for the chosen date.
+export type KefShiftAvailability = {
+  name: string // 'Noon' | 'Evening'
+  pickupHourDecimal: number // 12 / 22 by default
+  pickupTimeHHmm: string // 'HH:MM'
+  capacity: number
+  assigned: number // bookings already counted against this shift on the date
+  available: number // capacity - assigned (never negative)
+}
+
 export type KefAvailability = {
+  shifts: KefShiftAvailability[]
   driverWindows: KefDriverWindow[]
+  // Legacy aggregate fields — kept for any older client code reading the
+  // old shape. New code should sum `shifts[].available` instead. Once the
+  // client is on the per-shift path, these can be removed.
   lockersInUse: number
   lockerCapacity: number
   inLockerSeason: boolean

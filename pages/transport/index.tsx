@@ -649,8 +649,18 @@ const TransportPage = () => {
       return landingHour < w.endHour && customerWindowEnd > w.startHour
     })
     if (overlapsDriver) return 'pickup-delivery'
-    // Lockers run year-round. Only 'unavailable' when both lockers are
-    // already booked for this date — then the customer needs to contact us.
+    // Per-shift availability (Noon / Evening, sourced from the KEF Locker
+    // Operations Rules Airtable table). The customer's landing falls into
+    // the FIRST shift whose pickup hour is after them. If `available > 0`
+    // for that shift, we can take them; otherwise the day's locker
+    // capacity is spent and we tell them to contact us. Falls back to the
+    // legacy aggregate `lockersInUse/lockerCapacity` when the server
+    // hasn't shipped the per-shift field yet (e.g. during the rollout).
+    if (data.shifts && data.shifts.length > 0) {
+      const shift = data.shifts.find((s) => landingHour < s.pickupHourDecimal)
+      if (!shift) return 'unavailable' // landing past the last shift of the day
+      return shift.available > 0 ? 'locker' : 'unavailable'
+    }
     if (data.lockersInUse < data.lockerCapacity) return 'locker'
     return 'unavailable'
   }

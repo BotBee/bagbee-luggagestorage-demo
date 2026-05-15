@@ -92,6 +92,14 @@ const renderComments = (booking: TransportBooking, locale: string): string => {
     lines.push(`Pickup KEF mode: ${booking.pickupKefMode ?? 'arrival-service'}`)
     if (booking.pickupFlightNumber) lines.push(`Arrival flight: ${booking.pickupFlightNumber}`)
     if (booking.pickupOutsideHours) lines.push('Pickup outside opening hours: YES')
+    // [LOCKER] marker for KEF locker-mode bookings. /api/transport/kef-availability
+    // and /api/cron/kef-locker-monitor search for this literal substring in
+    // Annað (comment) to count per-shift locker assignments and to find
+    // bookings that need the "was it emptied?" Access Events check. Don't
+    // rename without coordinating with both routes.
+    if (booking.pickupKefMode === 'locker') {
+      lines.push('[LOCKER] KEF bike-pit locker drop-off')
+    }
   }
   if (booking.deliveryLocation === 'kef-airport') {
     if (booking.deliveryFlightNumber) lines.push(`Departure flight: ${booking.deliveryFlightNumber}`)

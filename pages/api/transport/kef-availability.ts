@@ -1,29 +1,30 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
 import { FALLBACK_TRANSPORT_PRICING } from '../../../common/transportConstants'
-import type { KefAvailability, KefDriverWindow } from '../../../common/transportTypes'
+import type {
+  KefAvailability,
+  KefDriverWindow,
+  KefShiftAvailability,
+} from '../../../common/transportTypes'
+import { loadActiveShifts, TransportShift } from '../../../utils/transportLockerShifts'
 
-// Returns the raw KEF activity on a given date so the client can resolve the
-// final pickup mode using the customer's flight landing time. The mode
-// decision lives on the client because it depends on whether the customer's
-// 3-hour pick-up window overlaps a real driver window:
+// Returns per-shift KEF activity for a given date.
 //
-//   pickup-delivery — at least one paid KEF booking on this date has a
-//                     Tímasetning window the customer's landing falls in.
-//                     The driver is already at arrivals; new customer hands
-//                     bags over directly. (Was called 'arrival-service'
-//                     internally; dispatch labels it 'Pickup & Delivery'.)
-//   locker          — no overlap with any driver window, and at least one
-//                     of the two Bike Pit lockers is free. Year-round.
-//   unavailable     — no overlap AND both lockers booked for this date.
-//                     The form shows a contact-us message; ops arranges
-//                     manually.
+// Shifts are read from `KEF Locker Operations Rules` (KEF Operation base
+// applEhUp3t8XHzp6r), so an operator can change shift timing or per-shift
+// locker count without a redeploy. Default rules: Noon 12:00 / Evening 22:00,
+// 2 lockers per shift.
 //
-// `inLockerSeason` is still returned for diagnostic / future use, but the
-// client no longer gates the locker option on it.
-// KefAvailability + KefDriverWindow live in common/transportTypes.ts so
-// client code can import them without pulling this server module's
-// dependencies through Next.js's bundler graph.
+// The client resolves the final pickup mode using the customer's flight
+// landing time:
+//   pickup-delivery — landing's 3h window overlaps a real driver window on
+//                     this date (an existing paid KEF booking's
+//                     Tímasetning). Driver is already at arrivals; new
+//                     customer hands bags over directly.
+//   locker          — no overlap, but the shift the landing falls into has
+//                     `available > 0`. Year-round.
+//   unavailable     — no overlap AND the shift is full (or landing is past
+//                     the last shift). Form shows "contact us" copy.
 
 const validateDate = (s: unknown): string | null => {
   if (typeof s !== 'string') return null
@@ -33,8 +34,7 @@ const validateDate = (s: unknown): string | null => {
 // Parse a time-window string like '06:00 - 08:00' or
 // '08:00 - 12:00 (flexible for the driver)' into start/end hours in 24h
 // decimal form. Returns null for anything that doesn't match the expected
-// 'HH:MM - HH:MM' shape (e.g. 'After 17:00 (BSÍ luggage locker)' — that's
-// a BSI marker, not a KEF slot, so it shouldn't surface here anyway).
+// 'HH:MM - HH:MM' shape (e.g. 'After 17:00 (BSÍ luggage locker)').
 const parseSlotTimes = (slot: string): { startHour: number; endHour: number } | null => {
   const m = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/.exec(slot.trim())
   if (!m) return null
@@ -43,6 +43,55 @@ const parseSlotTimes = (slot: string): { startHour: number; endHour: number } | 
   if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return null
   return { startHour, endHour }
 }
+
+// Decide which shift an existing booking should count against. The booking's
+// pickup window (Tímasetning) drives this — its start hour is the customer's
+// landing hour for KEF pickups. Returns null when the booking doesn't fall
+// into any known shift (e.g. landing after the last shift, or unparseable).
+const shiftForBooking = (
+  pickupSlot: string,
+  shifts: TransportShift[],
+): TransportShift | null => {
+  const parsed = parseSlotTimes(pickupSlot)
+  if (!parsed) return null
+  for (const s of shifts) {
+    if (parsed.startHour < s.pickupHourDecimal) return s
+  }
+  return null
+}
+
+// Loose flag: does this booking reference the BagBee locker drop-off? The
+// transport mapper writes a `[LOCKER]` marker into the booking comments, so
+// look for that first; fall back to legacy 'locker' substring matches for
+// any older rows that pre-date the marker.
+const isLockerBooking = (
+  ref: string,
+  pickup: string,
+  delivery: string,
+  comment: string,
+): boolean => {
+  if (/\[LOCKER\]/i.test(comment)) return true
+  return /locker/i.test(ref) || /locker/i.test(pickup) || /locker/i.test(delivery)
+}
+
+const fallbackShape = (
+  shifts: TransportShift[],
+  inLockerSeason: boolean,
+): KefAvailability => ({
+  shifts: shifts.map((s) => ({
+    name: s.name,
+    pickupHourDecimal: s.pickupHourDecimal,
+    pickupTimeHHmm: s.pickupTimeHHmm,
+    capacity: s.capacity,
+    assigned: 0,
+    available: s.capacity,
+  })),
+  driverWindows: [],
+  lockersInUse: 0,
+  lockerCapacity: shifts.reduce((sum, s) => sum + s.capacity, 0) ||
+    FALLBACK_TRANSPORT_PRICING.lockerCapacityPerDay,
+  inLockerSeason,
+})
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -57,12 +106,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const inLockerSeason =
     month >= FALLBACK_TRANSPORT_PRICING.lockerSeasonStartMonth &&
     month <= FALLBACK_TRANSPORT_PRICING.lockerSeasonEndMonth
-  const lockerCapacity = FALLBACK_TRANSPORT_PRICING.lockerCapacityPerDay
+
+  let shifts: TransportShift[]
+  try {
+    shifts = await loadActiveShifts()
+  } catch (error) {
+    console.error('[api][transport][kef-availability] rule load failed', error)
+    // Fail open: use the legacy single-bucket model so bookings don't break.
+    return res.status(200).json(fallbackShape([], inLockerSeason))
+  }
 
   try {
     const table = getOrdersLookupTable()
-    // Nýtt/óflokkað stores dates as YYYY/MM/DD (slash separator). Match both
-    // forms because a few legacy rows used dashes.
     const dateSlash = date.replace(/-/g, '/')
 
     const formula = `AND(
@@ -89,20 +144,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           'Delivery Address',
           'Tímasetning',
           'Delivery Time-window',
+          'Annað (comment)',
         ],
       })
       .firstPage()
 
-    // Build the union of driver windows. A single booking can contribute up
-    // to two windows: one for the pickup leg (if KEF) and one for the
-    // delivery leg (if KEF). We don't dedupe overlapping windows here —
-    // the client overlap check tolerates duplicates.
+    // Union of driver windows (any KEF leg's time window — pickup OR
+    // delivery contributes). Used by the client to detect "driver already
+    // at arrivals" pickup-delivery mode.
     const driverWindows: KefDriverWindow[] = []
+    // Per-shift assigned counter — bookings that look like locker mode.
+    const assignedByShift = new Map<string, number>(
+      shifts.map((s) => [s.name, 0]),
+    )
+    let lockersInUse = 0
+
     for (const r of records) {
       const heimilis = String(r.fields.Heimilisfang ?? '')
       const delivery = String(r.fields['Delivery Address'] ?? '')
       const pickupSlot = String(r.fields['Tímasetning'] ?? '')
       const deliverySlot = String(r.fields['Delivery Time-window'] ?? '')
+      const ref = String(r.fields.Reference ?? '')
+      const comment = String(r.fields['Annað (comment)'] ?? '')
 
       if (/keflav|kef/i.test(heimilis)) {
         const parsed = parseSlotTimes(pickupSlot)
@@ -112,35 +175,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const parsed = parseSlotTimes(deliverySlot)
         if (parsed) driverWindows.push({ ...parsed, label: deliverySlot })
       }
+
+      // Locker counting — only KEF pickups land in lockers (KEF deliveries
+      // use the driver-to-checkin route). Match the pickup leg only.
+      if (
+        /keflav|kef/i.test(heimilis) &&
+        isLockerBooking(ref, heimilis, delivery, comment)
+      ) {
+        lockersInUse += 1
+        const shift = shiftForBooking(pickupSlot, shifts)
+        if (shift) {
+          assignedByShift.set(shift.name, (assignedByShift.get(shift.name) ?? 0) + 1)
+        }
+      }
     }
 
-    // Locker count — look for the literal 'Locker' marker in Reference, or
-    // in either address field (loose match by design; v1).
-    const lockersInUse = records.filter((r) => {
-      const ref = String(r.fields.Reference ?? '')
-      const pickup = String(r.fields.Heimilisfang ?? '')
-      const delivery = String(r.fields['Delivery Address'] ?? '')
-      return /locker/i.test(ref) || /locker/i.test(pickup) || /locker/i.test(delivery)
-    }).length
+    const shiftAvailability: KefShiftAvailability[] = shifts.map((s) => {
+      const assigned = assignedByShift.get(s.name) ?? 0
+      return {
+        name: s.name,
+        pickupHourDecimal: s.pickupHourDecimal,
+        pickupTimeHHmm: s.pickupTimeHHmm,
+        capacity: s.capacity,
+        assigned,
+        available: Math.max(0, s.capacity - assigned),
+      }
+    })
 
     const result: KefAvailability = {
+      shifts: shiftAvailability,
       driverWindows,
       lockersInUse,
-      lockerCapacity,
+      lockerCapacity: shifts.reduce((sum, s) => sum + s.capacity, 0) ||
+        FALLBACK_TRANSPORT_PRICING.lockerCapacityPerDay,
       inLockerSeason,
     }
     return res.status(200).json(result)
   } catch (error) {
     console.error('[api][transport][kef-availability] failed', error)
-    // Fail open: tell the client there are no driver windows but lockers
-    // are theoretically available. The customer flow degrades to locker
-    // copy rather than blocking the booking entirely.
-    const fallback: KefAvailability = {
-      driverWindows: [],
-      lockersInUse: 0,
-      lockerCapacity,
-      inLockerSeason,
-    }
-    return res.status(200).json(fallback)
+    return res.status(200).json(fallbackShape(shifts, inLockerSeason))
   }
 }
