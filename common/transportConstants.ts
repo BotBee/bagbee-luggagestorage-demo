@@ -264,14 +264,38 @@ export const parseSlotStartHour = (slot: string): number | null => {
   return Number.isFinite(h) ? h : null
 }
 
+// Extract the END hour of a time-window string like '08:30 - 09:00'.
+// Returns null when the slot has no parseable HH:MM - HH:MM (flexible
+// shapes like '08:00 - 12:00 (flexible for the driver)' still parse — the
+// regex stops at the first end-time it finds).
+export const parseSlotEndHour = (slot: string): number | null => {
+  const m = /^\d{1,2}:\d{2}\s*-\s*(\d{1,2}):(\d{2})/.exec(slot.trim())
+  if (!m) return null
+  const h = parseInt(m[1], 10) + parseInt(m[2], 10) / 60
+  return Number.isFinite(h) ? h : null
+}
+
+// 30 min transit buffer between pickup end and delivery start when both
+// legs share the same calendar day. Shortest realistic drive between any
+// two BagBee service zones (cruise terminal → downtown hotel) is
+// ~15 min; pad to 30 to absorb loading + traffic without being precious.
+const SAME_DAY_TRANSIT_BUFFER_HOURS = 0.5
+
 // Earliest delivery hour given the pickup config, when pickup and delivery
 // fall on the same calendar day. Multi-day deliveries return 0 (no
 // constraint — bags can sit in BagBee's hands overnight).
 //
-// Logic: KEF pickup bags get into BagBee's hands at noon (morning landing,
-// locker collection) or 22:00 (afternoon landing). Add ~2 hours buffer
-// for the transit + handoff. Other pickup locations have a fast hand-off
-// (driver collects directly from customer) so no minimum is enforced.
+// Logic:
+//   • KEF pickup goes through the lockers, so bags are in BagBee's hands
+//     at the next collection shift (noon or 22:00). Morning landing → bags
+//     out at noon, earliest delivery 14:00. Afternoon landing → next pickup
+//     is 22:00, which means same-day delivery is effectively impossible
+//     (return 25 so every slot gets filtered).
+//   • Every OTHER pickup location (hotels, cruise terminals, BSÍ, manual
+//     address) is a direct driver hand-off — the earliest possible delivery
+//     is `pickup-end + transit buffer`. This is the rule that catches the
+//     "Skarfabakki 08:30–09:00 drop-off paired with 08:00–08:30 hotel
+//     delivery" sequence the operator flagged on 2026-05-16.
 export const minSameDayDeliveryHour = (
   pickupLocation: string | null | undefined,
   pickupDate: string | null | undefined,
@@ -280,18 +304,26 @@ export const minSameDayDeliveryHour = (
 ): number => {
   if (!pickupDate || !deliveryDate) return 0
   if (pickupDate !== deliveryDate) return 0
-  if (pickupLocation !== 'kef-airport') return 0
-  const landing = parseSlotStartHour(pickupTime || '')
-  // Without a known landing time, fall back to the morning-collection
-  // assumption (noon + 2h buffer) — least restrictive of the same-day
-  // limits, won't accidentally hide legit slots.
-  if (landing === null) return 14
-  if (landing < 12) return 14 // bags collected at noon → earliest 14:00
-  // Landings at noon or later mean the next BagBee KEF run is 22:00;
-  // same-day delivery after that is impractical. Return a number > 24
-  // so every same-day delivery slot gets filtered out and the customer
-  // sees an empty list, which is the truthful answer.
-  return 25
+
+  if (pickupLocation === 'kef-airport') {
+    const landing = parseSlotStartHour(pickupTime || '')
+    // Without a known landing time, fall back to the morning-collection
+    // assumption (noon + 2h buffer) — least restrictive of the same-day
+    // limits, won't accidentally hide legit slots.
+    if (landing === null) return 14
+    if (landing < 12) return 14 // bags collected at noon → earliest 14:00
+    // Landings at noon or later mean the next BagBee KEF run is 22:00;
+    // same-day delivery after that is impractical. Return a number > 24
+    // so every same-day delivery slot gets filtered out and the customer
+    // sees an empty list, which is the truthful answer.
+    return 25
+  }
+
+  // All non-KEF pickups: direct driver collection. Same-day delivery can
+  // start as soon as the pickup window ends + transit buffer.
+  const pickupEnd = parseSlotEndHour(pickupTime || '')
+  if (pickupEnd === null) return 0
+  return pickupEnd + SAME_DAY_TRANSIT_BUFFER_HOURS
 }
 
 // Time slot options for a given leg. Returns the BSI-specific slot set when
