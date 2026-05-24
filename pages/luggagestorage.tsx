@@ -1322,3 +1322,7 @@ Go enjoy Iceland.</h1>
 }
 
 export default LuggageStorage
+
+export async function getServerSideProps() {
+  return { props: {} }
+}
