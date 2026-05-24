@@ -10,9 +10,12 @@ import { Global, ThemeProvider } from '@emotion/react'
 import GlobalStyles from '../styles/global'
 import { UserContextProvider } from '../context/UserContext'
 import Script from 'next/script'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 export default function App({ Component, pageProps }: AppProps) {
+  const queryClient = new QueryClient()
   return (
+    <QueryClientProvider client={queryClient}>
     <main>
       <NextSeo
         title='Bagbee | Luggage pick up and check in service'
@@ -46,5 +49,6 @@ export default function App({ Component, pageProps }: AppProps) {
         </UserContextProvider>
       </ThemeProvider>
     </main>
+    </QueryClientProvider>
   )
 }
