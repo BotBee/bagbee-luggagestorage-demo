@@ -290,6 +290,22 @@ const orderTrackingPage = {
   fastTrackPassengersLabel: 'Passengers',
   fastTrackAddMore: '+ Add another passenger',
 
+  // Add bags (Planned + In Progress)
+  addBagsTitle: 'Need to add a bag?',
+  addBagsDescription:
+    'Extra bags can be added right up until the driver hands off your luggage.',
+  addBagsOpenButton: 'Add bags',
+  addBagsSectionTitle: 'Add bags to your order',
+  addBagsCurrentBags:
+    'You currently have {regular} regular and {oddsize} odd-size bags on this order.',
+  addBagsRegularLabel: 'Extra regular bags (1,990 kr each)',
+  addBagsOddSizeLabel: 'Extra odd-size bags (2,490 kr each)',
+  addBagsTotal: 'Total',
+  addBagsPay: 'Pay {amount} kr',
+  addBagsCancel: 'Cancel',
+  addBagsError:
+    'Could not start the payment. Please try again or contact BagBee.',
+
   // Cancel order
   cancelOrder: {
     linkText: 'Cancel order',

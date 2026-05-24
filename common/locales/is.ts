@@ -293,6 +293,22 @@ const orderTrackingPage = {
   fastTrackPassengersLabel: 'Farþegar',
   fastTrackAddMore: '+ Bæta við farþega',
 
+  // Add bags (Planned + In Progress)
+  addBagsTitle: 'Þarftu að bæta við tösku?',
+  addBagsDescription:
+    'Hægt er að bæta við töskum allt fram að því að bílstjórinn skilar farangrinum.',
+  addBagsOpenButton: 'Bæta við töskum',
+  addBagsSectionTitle: 'Bæta töskum við pöntunina',
+  addBagsCurrentBags:
+    'Þú ert með {regular} venjulegar töskur og {oddsize} sérstærðar á þessari pöntun.',
+  addBagsRegularLabel: 'Aukatöskur (1.990 kr/stk)',
+  addBagsOddSizeLabel: 'Aukatöskur í sérstærð (2.490 kr/stk)',
+  addBagsTotal: 'Samtals',
+  addBagsPay: 'Greiða {amount} kr',
+  addBagsCancel: 'Hætta við',
+  addBagsError:
+    'Ekki tókst að ræsa greiðsluna. Reyndu aftur eða hafðu samband við BagBee.',
+
   // Cancel order
   cancelOrder: {
     linkText: 'Hætta við pöntun',

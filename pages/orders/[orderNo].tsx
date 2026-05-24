@@ -998,6 +998,17 @@ const OrderPage = ({
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
 
+  // "Add bags" affordance for orders past Confirmed — once the route is
+  // Planned or the driver is In Progress, we don't want time/address changes
+  // (they'd break dispatch), but customers regularly realise they have an
+  // extra suitcase at the door and want to pay for it. Add-only counters
+  // (regular + odd-size) → reuses /api/order/update Rapyd surcharge flow.
+  const [showAddBags, setShowAddBags] = useState(false)
+  const [addBagsExtra, setAddBagsExtra] = useState<number>(0)
+  const [addOddSizeExtra, setAddOddSizeExtra] = useState<number>(0)
+  const [addBagsSubmitting, setAddBagsSubmitting] = useState(false)
+  const [addBagsError, setAddBagsError] = useState('')
+
   // Address edit state
   const [editAddress, setEditAddress] = useState<string>('')
 
@@ -1095,7 +1106,14 @@ const OrderPage = ({
   const isDelivered = status === 'Delivered'
   const isConfirmed = status === 'Confirmed'
   const isPlanned = status === 'Planned'
+  // Raw Airtable values include both "In Progress" and "In progress" but
+  // they're normalized to "In Progress" above (line 1078) before reaching us.
+  const isInProgress = status === 'In Progress'
   const isBeforePickup = status === 'Pending' || status === 'Confirmed' || status === 'Planned'
+  // Show the add-bags card on Planned + In Progress (Pending/Confirmed already
+  // have the full Edit pill which covers bag changes). Delivered/Cancelled
+  // are out — the operational window has closed.
+  const canAddBagsAfterPlanning = isPlanned || isInProgress
 
   const deliveryAddress = fields['Delivery Address'] || ''
   const pickupAddress = fields['Heimilisfang'] || ''
@@ -1303,6 +1321,61 @@ const OrderPage = ({
       setSubmitMessage(t.changesSaved)
     }
     setSubmitting(false)
+  }
+
+  // --- Add-bags-only helpers (Planned + In Progress states) ---
+  const addBagsSurcharge =
+    addBagsExtra * 1990 + addOddSizeExtra * 2490
+  const addBagsCanSubmit = addBagsExtra > 0 || addOddSizeExtra > 0
+
+  const openAddBags = () => {
+    setAddBagsExtra(0)
+    setAddOddSizeExtra(0)
+    setAddBagsError('')
+    setShowAddBags(true)
+  }
+
+  const closeAddBags = () => {
+    setShowAddBags(false)
+    setAddBagsExtra(0)
+    setAddOddSizeExtra(0)
+    setAddBagsError('')
+  }
+
+  const submitAddBags = async () => {
+    if (!addBagsCanSubmit) return
+    setAddBagsSubmitting(true)
+    setAddBagsError('')
+    try {
+      // Reuses the same Rapyd surcharge flow as the full edit. Send only the
+      // bag deltas — no time/address fields — so the payment-success handler
+      // updates bag counts without touching dispatch-critical fields.
+      const response = await fetch('/api/order/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNo,
+          originalBags,
+          originalOddSize,
+          originalAmount: fields['Upphæð'] || 0,
+          changes: {
+            bags: originalBags + addBagsExtra,
+            oddSize: originalOddSize + addOddSizeExtra,
+          },
+        }),
+      })
+      const data = await response.json()
+      if (data.paymentRequired && data.paymentUrl) {
+        window.location.href = data.paymentUrl
+        return
+      }
+      // Shouldn't really happen — adding bags always has a surcharge — but
+      // handle it gracefully by treating it as a success.
+      setShowAddBags(false)
+    } catch {
+      setAddBagsError(t.addBagsError)
+    }
+    setAddBagsSubmitting(false)
   }
 
   // --- Fast-Track helpers ---
@@ -1816,6 +1889,187 @@ const OrderPage = ({
                   </p>
                 )}
             </StatusCard>
+          </Section>
+        )}
+
+        {/* Add bags — visible on Planned + In Progress so a customer can pay
+            for an extra suitcase right up until the driver leaves their hands.
+            (Pending/Confirmed already have the full Edit pill that covers bag
+            changes alongside time/address.) */}
+        {canAddBagsAfterPlanning && !isEditing && !showAddBags && (
+          <ActionGrid>
+            <ActionCard variant='primary'>
+              <ActionIcon variant='primary'>+</ActionIcon>
+              <ActionTitle>{t.addBagsTitle}</ActionTitle>
+              <ActionDescription>{t.addBagsDescription}</ActionDescription>
+              <ActionButton variant='primary' onClick={openAddBags}>
+                {t.addBagsOpenButton}
+              </ActionButton>
+            </ActionCard>
+          </ActionGrid>
+        )}
+        {canAddBagsAfterPlanning && !isEditing && showAddBags && (
+          <Section>
+            <EditSection>
+              <EditTitle>{t.addBagsSectionTitle}</EditTitle>
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 13,
+                  color: '#696f79',
+                  margin: '0 0 16px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {String(t.addBagsCurrentBags)
+                  .replace('{regular}', String(originalBags))
+                  .replace('{oddsize}', String(originalOddSize))}
+              </p>
+
+              {/* Regular bags counter */}
+              <div style={{ marginBottom: 12 }}>
+                <TimeWindowLabel>{t.addBagsRegularLabel}</TimeWindowLabel>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 16px',
+                    border: '1px solid #e5e6eb',
+                    borderRadius: 12,
+                  }}
+                >
+                  <button
+                    type='button'
+                    onClick={() => setAddBagsExtra(Math.max(0, addBagsExtra - 1))}
+                    disabled={addBagsExtra === 0}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      border: '1px solid #e5e6eb', background: '#fafafa',
+                      fontSize: 18, fontWeight: 600, color: '#000929',
+                      cursor: addBagsExtra === 0 ? 'not-allowed' : 'pointer',
+                      opacity: addBagsExtra === 0 ? 0.4 : 1,
+                    }}
+                  >−</button>
+                  <span style={{
+                    flex: 1, textAlign: 'center', fontFamily: 'Poppins, sans-serif',
+                    fontSize: 16, fontWeight: 600, color: '#000929',
+                  }}>+{addBagsExtra}</span>
+                  <button
+                    type='button'
+                    onClick={() => setAddBagsExtra(addBagsExtra + 1)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #f3ad3c 0%, #e37f2f 100%)',
+                      fontSize: 18, fontWeight: 600, color: 'white', cursor: 'pointer',
+                    }}
+                  >+</button>
+                </div>
+              </div>
+
+              {/* Odd-size bags counter */}
+              <div style={{ marginBottom: 12 }}>
+                <TimeWindowLabel>{t.addBagsOddSizeLabel}</TimeWindowLabel>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 16px',
+                    border: '1px solid #e5e6eb',
+                    borderRadius: 12,
+                  }}
+                >
+                  <button
+                    type='button'
+                    onClick={() => setAddOddSizeExtra(Math.max(0, addOddSizeExtra - 1))}
+                    disabled={addOddSizeExtra === 0}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      border: '1px solid #e5e6eb', background: '#fafafa',
+                      fontSize: 18, fontWeight: 600, color: '#000929',
+                      cursor: addOddSizeExtra === 0 ? 'not-allowed' : 'pointer',
+                      opacity: addOddSizeExtra === 0 ? 0.4 : 1,
+                    }}
+                  >−</button>
+                  <span style={{
+                    flex: 1, textAlign: 'center', fontFamily: 'Poppins, sans-serif',
+                    fontSize: 16, fontWeight: 600, color: '#000929',
+                  }}>+{addOddSizeExtra}</span>
+                  <button
+                    type='button'
+                    onClick={() => setAddOddSizeExtra(addOddSizeExtra + 1)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #f3ad3c 0%, #e37f2f 100%)',
+                      fontSize: 18, fontWeight: 600, color: 'white', cursor: 'pointer',
+                    }}
+                  >+</button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: '#fff8ee',
+                  border: '1px solid #f3ad3c',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginTop: 8,
+                  textAlign: 'center',
+                }}
+              >
+                <p style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 14, color: '#000929', margin: 0,
+                }}>
+                  {t.addBagsTotal}: <strong>{addBagsSurcharge.toLocaleString()} kr</strong>
+                </p>
+                <p style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: 12, color: '#696f79', margin: '4px 0 0',
+                }}>
+                  {addBagsExtra > 0 && `${addBagsExtra} × 1,990 kr`}
+                  {addBagsExtra > 0 && addOddSizeExtra > 0 && '  +  '}
+                  {addOddSizeExtra > 0 && `${addOddSizeExtra} × 2,490 kr`}
+                </p>
+              </div>
+
+              {addBagsError && (
+                <p style={{
+                  color: '#c33', fontFamily: 'Poppins, sans-serif',
+                  fontSize: 13, marginTop: 12, textAlign: 'center',
+                }}>
+                  {addBagsError}
+                </p>
+              )}
+
+              <SubmitButton
+                onClick={submitAddBags}
+                disabled={addBagsSubmitting || !addBagsCanSubmit}
+              >
+                {addBagsSubmitting
+                  ? t.fastTrackProcessing
+                  : t.addBagsPay.replace(
+                      '{amount}',
+                      addBagsSurcharge.toLocaleString(),
+                    )}
+              </SubmitButton>
+
+              <button
+                onClick={closeAddBags}
+                disabled={addBagsSubmitting}
+                style={{
+                  width: '100%', marginTop: 8, padding: 12,
+                  background: 'transparent', border: 'none',
+                  color: '#696f79', fontFamily: 'Poppins, sans-serif',
+                  fontSize: 13, cursor: 'pointer', textDecoration: 'underline',
+                }}
+              >
+                {t.addBagsCancel}
+              </button>
+            </EditSection>
           </Section>
         )}
 
