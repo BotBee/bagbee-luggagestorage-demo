@@ -3,21 +3,18 @@ import { NextSeo } from 'next-seo'
 import { theme } from '../styles/theme'
 import '../styles/fonts.css'
 import '/node_modules/flag-icons/css/flag-icons.min.css'
-import QuickChat from '../components/quick-chat/QuickChat'
+import BagChat from '../components/bag-chat/BagChat'
 import GoogleTagScript from '../components/google-tag-script/GoogleTagScript'
+import ContentsquareScript from '../components/contentsquare-script/ContentsquareScript'
 import { Global, ThemeProvider } from '@emotion/react'
 import GlobalStyles from '../styles/global'
 import { UserContextProvider } from '../context/UserContext'
 import Script from 'next/script'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 export default function App({ Component, pageProps }: AppProps) {
-  const queryClient = new QueryClient()
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <main>
-        <NextSeo
+    <main>
+      <NextSeo
         title='Bagbee | Luggage pick up and check in service'
         description='Bagbee will pick up your luggage and check them in for you so you and your family can go directly to the gate without waiting in line'
         openGraph={{
@@ -35,7 +32,8 @@ export default function App({ Component, pageProps }: AppProps) {
       ></Script>
       <Global styles={GlobalStyles} />
       <GoogleTagScript />
-      <QuickChat />
+      <ContentsquareScript />
+      <BagChat />
       <Script
         type='text/javascript'
         src='//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js'
@@ -45,9 +43,8 @@ export default function App({ Component, pageProps }: AppProps) {
       <ThemeProvider theme={theme}>
         <UserContextProvider>
           <Component {...pageProps} />
-          </UserContextProvider>
-        </ThemeProvider>
-      </main>
-    </QueryClientProvider>
+        </UserContextProvider>
+      </ThemeProvider>
+    </main>
   )
 }

@@ -19,10 +19,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
-  const { paymentId, orderNo, tableType, reason } = req.body
+  const { paymentId, orderNo, recordId, tableType, reason } = req.body
 
   if (!paymentId) {
     return res.status(400).json({ message: 'paymentId is required' })
+  }
+
+  // Resolve which Airtable row to flip Refund Status on. The bag-orders cancel
+  // flow passes `orderNo` (the 5-char Pöntunarnúmer fx). Airtable automations
+  // for Fast-Track pass `recordId` directly, because the Fast Track table
+  // doesn't have a Fast-Track-unique order number — `order number` there is
+  // the parent N/Ó order's, and one parent can have multiple Fast-Track rows.
+  const isFastTrack = tableType === 'fast-track'
+  const lookupTable = () => (isFastTrack ? getFastTrackTable() : getOrdersLookupTable())
+  const findTargetRecord = async () => {
+    const table = lookupTable()
+    if (recordId && /^rec[a-zA-Z0-9]+$/.test(recordId)) {
+      try {
+        return await table.find(recordId)
+      } catch {
+        return null
+      }
+    }
+    if (orderNo) {
+      const filterField = isFastTrack ? 'order number' : 'Pöntunarnúmer (fx)'
+      const records = await table
+        .select({
+          filterByFormula: `{${filterField}} = '${orderNo}'`,
+          maxRecords: 1,
+        })
+        .firstPage()
+      return records[0] || null
+    }
+    return null
   }
 
   try {
@@ -72,25 +101,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     // Update Airtable refund status
-    if (orderNo) {
-      try {
-        const isFastTrack = tableType === 'fast-track'
-        const table = isFastTrack ? getFastTrackTable() : getOrdersLookupTable()
-        const filterField = isFastTrack ? 'Order ID' : 'Pöntunarnúmer (fx)'
-        const records = await table
-          .select({
-            filterByFormula: `{${filterField}} = '${orderNo}'`,
-            maxRecords: 1,
-          })
-          .firstPage()
-
-        if (records.length > 0) {
-          await table.update(records[0].id, { 'Refund Status': 'Refunded' })
-        }
-      } catch (airtableError) {
-        console.error('[api][rapyd][refund] Airtable update error:', airtableError)
-        // Refund succeeded but Airtable update failed — still return success
+    try {
+      const record = await findTargetRecord()
+      if (record) {
+        await lookupTable().update(record.id, { 'Refund Status': 'Refunded' })
       }
+    } catch (airtableError) {
+      console.error('[api][rapyd][refund] Airtable update error:', airtableError)
+      // Refund succeeded but Airtable update failed — still return success
     }
 
     res.status(200).json({ success: true, refund: result })
@@ -98,24 +116,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[api][rapyd][refund] Rapyd refund error:', error)
 
     // Try to mark as failed in Airtable
-    if (orderNo) {
-      try {
-        const isFastTrack = tableType === 'fast-track'
-        const table = isFastTrack ? getFastTrackTable() : getOrdersLookupTable()
-        const filterField = isFastTrack ? 'Order ID' : 'Pöntunarnúmer (fx)'
-        const records = await table
-          .select({
-            filterByFormula: `{${filterField}} = '${orderNo}'`,
-            maxRecords: 1,
-          })
-          .firstPage()
-
-        if (records.length > 0) {
-          await table.update(records[0].id, { 'Refund Status': 'Refund Failed' })
-        }
-      } catch {
-        // ignore secondary failure
+    try {
+      const record = await findTargetRecord()
+      if (record) {
+        await lookupTable().update(record.id, { 'Refund Status': 'Refund Failed' })
       }
+    } catch {
+      // ignore secondary failure
     }
 
     res.status(500).json({ success: false, message: 'Refund failed', error: error?.message || error })

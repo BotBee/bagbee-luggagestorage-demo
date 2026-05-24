@@ -136,6 +136,13 @@ export default async function handler(
       payment_method_type_categories: ['card', 'bank_redirect'],
       complete_payment_url: successUrl,
       error_payment_url: errorUrl,
+      // Webhook (/api/payment/webhooks) reads metadata.recordId +
+      // metadata.tableType to mark the Fast-Track row paid AND persist the
+      // Rapyd Payment ID for later refunds via /api/rapyd/refund.
+      metadata: {
+        recordId: fastTrackId,
+        tableType: 'fast-track',
+      },
     }
 
     const rapydRes = await fetch(`${baseUrl}/api/rapyd`, {
