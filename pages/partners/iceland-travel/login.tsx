@@ -1,7 +1,8 @@
 import styled from '@emotion/styled'
 import { GetServerSideProps } from 'next'
 import { useRouter } from 'next/router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import BagBeeLogo from '../../../public/icons/Logo'
 import { verifyPartner } from '../../../utils/partnerAuth'
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -30,18 +31,15 @@ const Card = styled.div`
   padding: 32px;
 `
 
-const Logo = styled.div`
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: #3d7165;
-  color: white;
-  display: grid;
-  place-items: center;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 16px;
+// Wraps the BagBee SVG wordmark — sized to sit comfortably above the title.
+// The wordmark already includes the "BagBee" letterforms so we don't repeat
+// the name as a text logo block.
+const LogoMark = styled.div`
+  margin-bottom: 18px;
+  & svg {
+    height: 28px;
+    width: auto;
+  }
 `
 
 const Title = styled.h1`
@@ -77,6 +75,25 @@ const Input = styled.input`
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
+  box-sizing: border-box;
+  &:focus { border-color: #3d7165; }
+`
+
+// Big, monospaced, letterspaced — codes are 6 digits and the spacing
+// makes them readable while typing.
+const CodeInput = styled.input`
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #d9dde2;
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 10px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
   &:focus { border-color: #3d7165; }
 `
 
@@ -97,12 +114,35 @@ const Button = styled.button`
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 `
 
+const LinkButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 14px;
+  color: #3d7165;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  &:disabled { opacity: 0.5; cursor: not-allowed; text-decoration: none; }
+`
+
 const Err = styled.div`
   margin-top: 12px;
   padding: 10px 14px;
   border-radius: 10px;
   background: #fdecea;
   color: #b3261e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+`
+
+const Ok = styled.div`
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #e7f6ec;
+  color: #176c2c;
   font-family: 'Poppins', sans-serif;
   font-size: 13px;
 `
@@ -115,28 +155,94 @@ const Hint = styled.div`
   text-align: center;
 `
 
+const EmailLine = styled.div`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #696f79;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const EmailValue = styled.span`
+  color: #000929;
+  font-weight: 500;
+  word-break: break-all;
+`
+
+// Two-step UI:
+//   step 1 — collect email, POST /request-code
+//   step 2 — collect 6-digit code, POST /verify-code
+//
+// We keep the same Card chrome between steps so the transition is just a
+// content swap; no route change.
+
+type Step = 'email' | 'code'
+
 export default function PartnerLogin() {
   const router = useRouter()
-  const [password, setPassword] = useState('')
+  const [step, setStep] = useState<Step>('email')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const codeRef = useRef<HTMLInputElement>(null)
 
-  const onSubmit = async (e: React.FormEvent) => {
+  // Auto-focus the code input when we land on step 2.
+  useEffect(() => {
+    if (step === 'code') {
+      codeRef.current?.focus()
+    }
+  }, [step])
+
+  const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setInfo(null)
     try {
-      const res = await fetch('/api/partners/iceland-travel/login', {
+      const res = await fetch('/api/partners/iceland-travel/request-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.message || 'Login failed')
+        setError(data.message || 'Could not send the code.')
         setLoading(false)
         return
       }
+      setStep('code')
+      setInfo(`We sent a 6-digit code to ${email}. Check your inbox.`)
+      setLoading(false)
+    } catch (err) {
+      setError('Network error — please try again.')
+      setLoading(false)
+    }
+  }
+
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const res = await fetch('/api/partners/iceland-travel/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.message || 'Could not verify the code.')
+        setLoading(false)
+        return
+      }
+      // Logged in — go straight to the dashboard. The dashboard's
+      // getServerSideProps will see the session cookie and load orders.
       router.replace('/partners/iceland-travel/dashboard')
     } catch (err) {
       setError('Network error — please try again.')
@@ -144,30 +250,98 @@ export default function PartnerLogin() {
     }
   }
 
+  const resendCode = async () => {
+    setLoading(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const res = await fetch('/api/partners/iceland-travel/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.message || 'Could not resend the code.')
+      } else {
+        setInfo('Sent another code. Old codes are no longer valid.')
+        setCode('')
+      }
+    } catch (err) {
+      setError('Network error — please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const changeEmail = () => {
+    setStep('email')
+    setCode('')
+    setError(null)
+    setInfo(null)
+  }
+
   return (
     <Page>
       <Card>
-        <Logo>BB</Logo>
+        <LogoMark>
+          <BagBeeLogo fill="#3d7165" />
+        </LogoMark>
         <Title>Iceland Travel</Title>
-        <Sub>Partner portal · sign in to manage your bookings</Sub>
-        <form onSubmit={onSubmit}>
-          <Label htmlFor="password">Access password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            autoFocus
-            autoComplete="current-password"
-            required
-          />
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
-          </Button>
-          {error && <Err>{error}</Err>}
-        </form>
-        <Hint>Forgotten the password? Email runar@bagbee.is</Hint>
+        <Sub>Partner portal · sign in with a code emailed to you</Sub>
+
+        {step === 'email' ? (
+          <form onSubmit={submitEmail}>
+            <Label htmlFor="email">Work email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@icelandtravel.is"
+              autoFocus
+              autoComplete="email"
+              required
+            />
+            <Button type="submit" disabled={loading || !email.trim()}>
+              {loading ? 'Sending…' : 'Email me a code'}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={submitCode}>
+            <EmailLine>
+              <EmailValue>{email}</EmailValue>
+              <LinkButton type="button" onClick={changeEmail} disabled={loading}>
+                Change
+              </LinkButton>
+            </EmailLine>
+            <Label htmlFor="code">6-digit code</Label>
+            <CodeInput
+              id="code"
+              ref={codeRef}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              pattern="\d{6}"
+              value={code}
+              onChange={(e) =>
+                setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+              placeholder="••••••"
+              required
+            />
+            <Button type="submit" disabled={loading || code.length !== 6}>
+              {loading ? 'Verifying…' : 'Sign in'}
+            </Button>
+            <LinkButton type="button" onClick={resendCode} disabled={loading}>
+              Send a new code
+            </LinkButton>
+          </form>
+        )}
+
+        {info && <Ok>{info}</Ok>}
+        {error && <Err>{error}</Err>}
+        <Hint>Forgotten access? Email runar@bagbee.is</Hint>
       </Card>
     </Page>
   )

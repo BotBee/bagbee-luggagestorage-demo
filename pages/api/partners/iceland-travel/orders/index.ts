@@ -1,11 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { requirePartner } from '../../../../../utils/partnerAuth'
+import { PARTNERS, requirePartner } from '../../../../../utils/partnerAuth'
 import {
   computeKpis,
   createPartnerOrder,
   listPartnerOrders,
   NewOrderInput,
 } from '../../../../../utils/partnerOrders'
+import { sendNewOrderApprovalNotice } from '../../../../../utils/partnerNotifications'
+import { normalizePhone } from '../../../../../utils/phoneNormalize'
 
 const PARTNER_ID = 'iceland-travel' as const
 // nudge HMR
@@ -46,8 +48,11 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
   if (!phone) return { ok: false, reason: 'Phone required' }
   if (typeof serviceType !== 'string' || !VALID_SERVICE_TYPES.includes(serviceType as NewOrderInput['serviceType']))
     return { ok: false, reason: 'Service type invalid' }
-  if (!isYmd(flightDate)) return { ok: false, reason: 'Flight date must be YYYY-MM-DD' }
-  if (!isYmd(pickupDate)) return { ok: false, reason: 'Pickup date must be YYYY-MM-DD' }
+  // The form sends `flightDate` = `pickupDate` as a back-compat shim now
+  // that we no longer collect flight-side info from partners. Both fields
+  // arrive populated with the same date so validation still runs.
+  if (!isYmd(pickupDate)) return { ok: false, reason: 'Date of service must be YYYY-MM-DD' }
+  if (!isYmd(flightDate)) return { ok: false, reason: 'Date of service must be YYYY-MM-DD' }
   if (!timeWindow) return { ok: false, reason: 'Time window required' }
   if (!pickupAddress) return { ok: false, reason: 'Pickup address required' }
   if (!Number.isFinite(bagsRegular) || bagsRegular < 0)
@@ -59,10 +64,8 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
 
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
-  const fd = new Date(`${flightDate}T00:00:00Z`).getTime()
   const pd = new Date(`${pickupDate}T00:00:00Z`).getTime()
-  if (fd < today.getTime()) return { ok: false, reason: 'Flight date is in the past' }
-  if (pd < today.getTime()) return { ok: false, reason: 'Pickup date is in the past' }
+  if (pd < today.getTime()) return { ok: false, reason: 'Date of service is in the past' }
 
   return {
     ok: true,
@@ -75,7 +78,9 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
       contactName: typeof b.contactName === 'string' ? b.contactName.trim() : undefined,
       reference,
       email,
-      phone,
+      // Always normalize to E.164 (+<cc><number>) before writing to
+      // Airtable so downstream SMS / dispatch flows get a stable format.
+      phone: normalizePhone(phone),
       serviceType: serviceType as NewOrderInput['serviceType'],
       flightDate,
       pickupDate,
@@ -132,6 +137,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     try {
       const created = await createPartnerOrder(PARTNER_ID, validation.input)
+      // IMPORTANT: await the notifier. On Vercel serverless the function is
+      // torn down the moment we return — fire-and-forget promises get
+      // killed mid-TLS-handshake and the email never actually sends. We
+      // accept the 1-2s extra latency in exchange for an email that
+      // reliably arrives. The notifier swallows its own errors, so a mail
+      // outage still doesn't fail the order create.
+      await sendNewOrderApprovalNotice(
+        PARTNER_ID,
+        PARTNERS[PARTNER_ID].displayName,
+        created,
+      )
       return res.status(201).json({ order: created })
     } catch (err) {
       console.error('[partner orders POST] failed', err)

@@ -97,10 +97,12 @@ type Props = {
   orderId: string
   // When true, render the slim sidebar variant (shorter map, no hint).
   compact?: boolean
-  // Optional callback when the pickup pin is dragged + persisted, so the
+  // Optional callback when either pin is dragged + persisted, so the
   // parent can refresh its order state if needed.
   // eslint-disable-next-line no-unused-vars
   onPickupMoved?: (coords: { lat: number; lng: number }) => void
+  // eslint-disable-next-line no-unused-vars
+  onDeliveryMoved?: (coords: { lat: number; lng: number }) => void
 }
 
 type TrackingPayload = {
@@ -116,6 +118,7 @@ export const OrderTrackingMap = ({
   orderId,
   compact = false,
   onPickupMoved,
+  onDeliveryMoved,
 }: Props) => {
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
@@ -129,11 +132,14 @@ export const OrderTrackingMap = ({
 
   const [tracking, setTracking] = useState<TrackingPayload | null>(null)
   const [loadingTracking, setLoadingTracking] = useState(true)
-  // Local override during the drag so the marker doesn't snap back while
-  // the server is saving (optimistic UI). When non-null, this wins.
+  // Local overrides during a drag so the marker doesn't snap back while
+  // the server is saving (optimistic UI). When non-null, these win.
   const [localPickup, setLocalPickup] = useState<{ lat: number; lng: number } | null>(
     null,
   )
+  const [localDelivery, setLocalDelivery] = useState<
+    { lat: number; lng: number } | null
+  >(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
   )
@@ -172,27 +178,34 @@ export const OrderTrackingMap = ({
   }, [orderId])
 
   const effectivePickup = localPickup ?? tracking?.pickup ?? null
+  const effectiveDelivery = localDelivery ?? tracking?.delivery ?? null
 
   const fitPoints = useMemo(() => {
     const pts: Array<{ lat: number; lng: number }> = []
     if (effectivePickup) pts.push(effectivePickup)
-    if (tracking?.delivery) pts.push(tracking.delivery)
+    if (effectiveDelivery) pts.push(effectiveDelivery)
     return pts
-  }, [effectivePickup, tracking?.delivery])
+  }, [effectivePickup, effectiveDelivery])
 
-  const savePickup = async (coords: { lat: number; lng: number }) => {
+  // One save path for either end of the trip — the only thing that
+  // differs is the pair of Airtable field keys we PATCH and the
+  // optimistic-UI cache we update on the client.
+  type PinKind = 'pickup' | 'delivery'
+
+  const savePin = async (
+    kind: PinKind,
+    coords: { lat: number; lng: number },
+  ) => {
     setSaveState('saving')
     try {
+      const changes =
+        kind === 'pickup'
+          ? { pickupLatOverride: coords.lat, pickupLngOverride: coords.lng }
+          : { deliveryLatOverride: coords.lat, deliveryLngOverride: coords.lng }
       const res = await fetch(`/api/partners/iceland-travel/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changes: {
-            pickupLatOverride: coords.lat,
-            pickupLngOverride: coords.lng,
-          },
-          actor: 'pin-drag',
-        }),
+        body: JSON.stringify({ changes, actor: `${kind}-pin-drag` }),
       })
       if (!res.ok) {
         setSaveState('error')
@@ -200,25 +213,24 @@ export const OrderTrackingMap = ({
       }
       setSaveState('saved')
       setTimeout(() => setSaveState('idle'), 2500)
-      onPickupMoved?.(coords)
+      if (kind === 'pickup') onPickupMoved?.(coords)
+      else onDeliveryMoved?.(coords)
     } catch {
       setSaveState('error')
     }
   }
 
-  const resetPickup = async () => {
+  const resetPin = async (kind: PinKind) => {
     setSaveState('saving')
     try {
+      const changes =
+        kind === 'pickup'
+          ? { pickupLatOverride: null, pickupLngOverride: null }
+          : { deliveryLatOverride: null, deliveryLngOverride: null }
       const res = await fetch(`/api/partners/iceland-travel/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changes: {
-            pickupLatOverride: null,
-            pickupLngOverride: null,
-          },
-          actor: 'pin-reset',
-        }),
+        body: JSON.stringify({ changes, actor: `${kind}-pin-reset` }),
       })
       if (!res.ok) {
         setSaveState('error')
@@ -237,7 +249,8 @@ export const OrderTrackingMap = ({
           provider: data.tracking.provider,
         })
       }
-      setLocalPickup(null)
+      if (kind === 'pickup') setLocalPickup(null)
+      else setLocalDelivery(null)
       setSaveState('saved')
       setTimeout(() => setSaveState('idle'), 2500)
     } catch {
@@ -256,21 +269,35 @@ export const OrderTrackingMap = ({
     )
   }
 
-  const noKnownLocation = !effectivePickup && !tracking?.delivery
+  const noKnownLocation = !effectivePickup && !effectiveDelivery
 
   return (
     <Wrapper>
       <HeaderRow>
-        <Title>Pickup map</Title>
-        {saveState === 'saving' && <Chip kind="saving">Saving pickup location…</Chip>}
-        {saveState === 'saved' && <Chip kind="ok">Pickup location saved</Chip>}
+        <Title>Pickup &amp; delivery map</Title>
+        {saveState === 'saving' && <Chip kind="saving">Saving location…</Chip>}
+        {saveState === 'saved' && <Chip kind="ok">Location saved</Chip>}
         {saveState === 'error' && (
           <Chip kind="saving">Could not save — try again</Chip>
         )}
         {saveState === 'idle' && localPickup && (
           <Chip kind="muted">
-            Manually placed
-            <ResetButton onClick={resetPickup} title="Use geocoded address again">
+            Pickup manually placed
+            <ResetButton
+              onClick={() => resetPin('pickup')}
+              title="Use geocoded pickup address again"
+            >
+              reset
+            </ResetButton>
+          </Chip>
+        )}
+        {saveState === 'idle' && localDelivery && (
+          <Chip kind="muted">
+            Delivery manually placed
+            <ResetButton
+              onClick={() => resetPin('delivery')}
+              title="Use geocoded delivery address again"
+            >
               reset
             </ResetButton>
           </Chip>
@@ -333,7 +360,7 @@ export const OrderTrackingMap = ({
                   if (lat == null || lng == null) return
                   const next = { lat, lng }
                   setLocalPickup(next)
-                  void savePickup(next)
+                  void savePin('pickup', next)
                 }}
                 label={{
                   text: 'P',
@@ -356,9 +383,18 @@ export const OrderTrackingMap = ({
                 title="Pickup — drag to adjust"
               />
             )}
-            {tracking?.delivery && (
+            {effectiveDelivery && (
               <Marker
-                position={tracking.delivery}
+                position={effectiveDelivery}
+                draggable
+                onDragEnd={(e) => {
+                  const lat = e.latLng?.lat()
+                  const lng = e.latLng?.lng()
+                  if (lat == null || lng == null) return
+                  const next = { lat, lng }
+                  setLocalDelivery(next)
+                  void savePin('delivery', next)
+                }}
                 label={{
                   text: 'D',
                   color: 'white',
@@ -375,7 +411,7 @@ export const OrderTrackingMap = ({
                   anchor: new window.google.maps.Point(12, 36),
                   labelOrigin: new window.google.maps.Point(12, 13),
                 }}
-                title="Delivery"
+                title="Delivery — drag to adjust"
               />
             )}
           </GoogleMap>
@@ -384,9 +420,9 @@ export const OrderTrackingMap = ({
 
       {!compact && (
         <Hint>
-          Drag the green pickup pin to fine-tune where the driver should stop
-          (e.g. an entrance the geocoder gets wrong). Your placement is saved
-          to the order automatically.
+          Drag the green pickup pin or the blue delivery pin to fine-tune where
+          the driver should stop (e.g. an entrance the geocoder gets wrong).
+          Your placement is saved to the order automatically.
         </Hint>
       )}
     </Wrapper>

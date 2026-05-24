@@ -154,6 +154,11 @@ export const FIELDS = {
   // Empty == use whatever Google's geocoder returns for the address.
   pickupLatOverride: 'fldqms85fagdrer2t',
   pickupLngOverride: 'fld2NQ3JgAAFU6T73',
+  // Same idea for the delivery pin. Populated when the partner drags the
+  // delivery marker on the dashboard map; empty == use whatever Google
+  // returns for the delivery address.
+  deliveryLatOverride: 'fldgzIFTpA12SNjJS',
+  deliveryLngOverride: 'fldnTZhmbKjjJqIcv',
   pickupAddressFormula: 'fldlvO53oCJR4Etpg', // "Götuheiti (fx)"
   hotelNameFormula: 'fldTcb9WXSlJKWOdX', // "Address Formula"
   shortAddress: 'fldugdYI5G0TwNpI9', // "Short Address" (also doubles as delivery destination label)
@@ -227,6 +232,8 @@ const F_NAMES = {
   pickupAddressFull: 'Heimilisfang',
   pickupLatOverride: 'Pickup latitude override',
   pickupLngOverride: 'Pickup longitude override',
+  deliveryLatOverride: 'Delivery latitude override',
+  deliveryLngOverride: 'Delivery longitude override',
   pickupAddressFormula: 'Götuheiti (fx)',
   hotelNameFormula: 'Address Formula',
   shortAddress: 'Short Address',
@@ -292,6 +299,10 @@ export type OrderSummary = {
   deliveryAddress: string | null
   deliveryDate: string | null
   deliveryTimeWindow: string | null
+  // Same idea as the pickup overrides — set when the partner drags the
+  // delivery marker on the dashboard map.
+  deliveryLatOverride: number | null
+  deliveryLngOverride: number | null
   airline: string | null
   flightNumber: string | null
   destinationCode: string | null
@@ -443,6 +454,14 @@ const mapRecord = (record: AirtableRecord<FieldSet>): OrderSummary => {
       const v = get(F_NAMES.pickupLngOverride)
       return typeof v === 'number' && Number.isFinite(v) ? v : null
     })(),
+    deliveryLatOverride: (() => {
+      const v = get(F_NAMES.deliveryLatOverride)
+      return typeof v === 'number' && Number.isFinite(v) ? v : null
+    })(),
+    deliveryLngOverride: (() => {
+      const v = get(F_NAMES.deliveryLngOverride)
+      return typeof v === 'number' && Number.isFinite(v) ? v : null
+    })(),
     hotelName: asString(get(F_NAMES.hotelNameFormula)),
     airline: asString(get(F_NAMES.airline)),
     flightNumber: asString(get(F_NAMES.flightNumberFull)),
@@ -565,6 +584,8 @@ export type EditableField =
   | 'pickupAddress'
   | 'pickupLatOverride'
   | 'pickupLngOverride'
+  | 'deliveryLatOverride'
+  | 'deliveryLngOverride'
   | 'deliveryAddress'
   | 'deliveryDate'
   | 'deliveryTimeWindow'
@@ -586,6 +607,8 @@ const EDIT_FIELD_MAP: Record<EditableField, FieldId> = {
   pickupAddress: FIELDS.pickupAddressFull,
   pickupLatOverride: FIELDS.pickupLatOverride,
   pickupLngOverride: FIELDS.pickupLngOverride,
+  deliveryLatOverride: FIELDS.deliveryLatOverride,
+  deliveryLngOverride: FIELDS.deliveryLngOverride,
   deliveryAddress: FIELDS.deliveryAddress,
   deliveryDate: FIELDS.deliveryDate,
   deliveryTimeWindow: FIELDS.deliveryTimeWindow,

@@ -162,6 +162,9 @@ export const computeOrderTracking = async (params: {
   // Manual pickup-pin placement from the dashboard map. When set, skip
   // geocoding entirely for the pickup point.
   pickupOverride?: LatLng | null
+  // Same for the delivery pin — when the partner drags it on the map,
+  // we trust the manual placement over the geocoder.
+  deliveryOverride?: LatLng | null
 }): Promise<OrderTracking> => {
   const [pickup, delivery] = await Promise.all([
     params.pickupOverride
@@ -169,12 +172,16 @@ export const computeOrderTracking = async (params: {
       : params.pickupAddress
       ? geocode(params.pickupAddress)
       : Promise.resolve(null),
-    params.deliveryAddress ? geocode(params.deliveryAddress) : Promise.resolve(null),
+    params.deliveryOverride
+      ? Promise.resolve(params.deliveryOverride)
+      : params.deliveryAddress
+      ? geocode(params.deliveryAddress)
+      : Promise.resolve(null),
   ])
   const hint = await provider.getRouteHint(params.orderRecordId)
   // Manual override takes top priority, then provider hint, then geocode.
   const finalPickup = params.pickupOverride ?? hint.pickup ?? pickup
-  const finalDelivery = hint.delivery ?? delivery
+  const finalDelivery = params.deliveryOverride ?? hint.delivery ?? delivery
   const driver = params.driverRecordId
     ? await provider.getDriverPosition(params.driverRecordId, params.orderRecordId)
     : null

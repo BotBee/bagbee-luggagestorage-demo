@@ -1,7 +1,7 @@
 import styled from '@emotion/styled'
 import { GetServerSideProps } from 'next'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import PartnerLayout from '../../../../components/partners/PartnerLayout'
 import OrderTrackingMap from '../../../../components/partners/OrderTrackingMap'
 import DriverMessageBar from '../../../../components/partners/DriverMessageBar'
@@ -11,10 +11,19 @@ import {
   getPartnerOrder,
   OrderSummary,
 } from '../../../../utils/partnerOrders'
+import {
+  computeOrderPrice,
+  formatIsk,
+  PriceQuote,
+} from '../../../../utils/partnerPricing'
 
 type Props = {
   partnerDisplayName: string
   order: OrderSummary
+  // Pre-computed quote for this order's current state. Re-runs client-side
+  // when the partner edits an input that affects pricing (service, bags,
+  // time window) so the trip summary stays in sync as they tweak.
+  initialQuote: PriceQuote
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
@@ -28,10 +37,33 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   if (typeof recordId !== 'string') return { notFound: true }
   const order = await getPartnerOrder(partner, recordId)
   if (!order) return { notFound: true }
+  // Compute the live quote at SSR so the Trip Summary card renders the
+  // priced breakdown on first paint. Out-of-pricelist orders get a
+  // "manual quote" message instead. Pricing failures must not block the
+  // page — fall back to a neutral out-of-pricelist value if Airtable
+  // is down.
+  const initialQuote: PriceQuote = await computeOrderPrice({
+    customer: 'Iceland Travel',
+    serviceType: order.serviceType,
+    bagsRegular: order.bagsRegular,
+    bagsOdd: order.bagsOdd,
+    timeWindow: order.timeWindow,
+    pickupAddress: order.pickupAddress,
+    deliveryAddress: order.deliveryAddress,
+  }).catch(
+    (err): PriceQuote => {
+      console.error('[order detail SSR] price calc failed', err)
+      return {
+        kind: 'out-of-pricelist',
+        reason: 'Price calculator unavailable — refresh in a moment.',
+      }
+    },
+  )
   return {
     props: {
       partnerDisplayName: PARTNERS[partner].displayName,
       order,
+      initialQuote,
     },
   }
 }
@@ -115,6 +147,12 @@ const Field = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 12px;
+  /* Grid items default to min-width: auto, which lets a child with intrinsic
+     size (e.g. <input type="date"> on iOS) push the column past 1fr. Force
+     min-width: 0 so the 1fr allocation actually wins. */
+  & > div {
+    min-width: 0;
+  }
   /* Narrow viewports (phones) — stack the two fields so neither input is
      squished. Matches the layout grid's 900px breakpoint above. */
   @media (max-width: 720px) {
@@ -133,19 +171,46 @@ const Label = styled.label`
   margin-bottom: 6px;
 `
 
+// box-sizing + min-width:0 are both needed to keep <input type="date"> from
+// blowing past its grid column on iOS Safari (which gives date inputs an
+// intrinsic content width based on the "yyyy-mm-dd" placeholder + calendar
+// glyph). Without min-width:0 the grid column auto-expands to fit the
+// intrinsic size and the cell ends up wider than the screen.
+//
+// We also force a consistent visual height + white background across both
+// text and date inputs so they line up cleanly when stacked on phones —
+// iOS otherwise renders <input type="date"> with a slightly different
+// height and a faint gray fill, which makes a column of mixed inputs look
+// ragged on a 375px screen.
 const Input = styled.input`
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 42px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #d9dde2;
+  background: white;
   font-family: 'Poppins', sans-serif;
   font-size: 14px;
   outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  /* Date inputs on iOS keep the calendar glyph; normalize the gray box
+     they draw around it so a column of mixed inputs reads as one set. */
+  &::-webkit-date-and-time-value {
+    text-align: left;
+  }
+  &::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+  }
   &:focus { border-color: #3d7165; }
 `
 
 const Textarea = styled.textarea`
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #d9dde2;
@@ -159,6 +224,8 @@ const Textarea = styled.textarea`
 
 const Select = styled.select`
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #d9dde2;
@@ -245,16 +312,16 @@ const SERVICE_OPTIONS = [
   'BSI to Hotel Delivery',
 ]
 
-const MONTHS_SHORT = [
-  'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
-]
-
+// Iceland Travel uses dd/mm/yyyy — keep displays consistent regardless of
+// the staffer's device locale so an English-set iPhone still renders the
+// expected format.
 const fmtDate = (s: string | null) => {
   if (!s) return '—'
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
   const dd = String(d.getUTCDate()).padStart(2, '0')
-  return `${dd} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getUTCFullYear()}`
 }
 
 type FormState = Record<EditableField, string>
@@ -273,6 +340,10 @@ const orderToForm = (o: OrderSummary): FormState => ({
   // the diff helper sees them as no-op when not changed.
   pickupLatOverride: o.pickupLatOverride != null ? String(o.pickupLatOverride) : '',
   pickupLngOverride: o.pickupLngOverride != null ? String(o.pickupLngOverride) : '',
+  deliveryLatOverride:
+    o.deliveryLatOverride != null ? String(o.deliveryLatOverride) : '',
+  deliveryLngOverride:
+    o.deliveryLngOverride != null ? String(o.deliveryLngOverride) : '',
   deliveryAddress: o.deliveryAddress || '',
   deliveryDate: o.deliveryDate || '',
   deliveryTimeWindow: o.deliveryTimeWindow || '',
@@ -327,18 +398,71 @@ const diff = (
   return out
 }
 
-export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
+export default function PartnerOrderPage({
+  partnerDisplayName,
+  order,
+  initialQuote,
+}: Props) {
   const [original, setOriginal] = useState(order)
   const [form, setForm] = useState<FormState>(() => orderToForm(order))
   const [actor, setActor] = useState(order.contactName || '')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
+  const [quote, setQuote] = useState<PriceQuote>(initialQuote)
 
   useEffect(() => {
     setOriginal(order)
     setForm(orderToForm(order))
     setActor(order.contactName || '')
-  }, [order])
+    setQuote(initialQuote)
+  }, [order, initialQuote])
+
+  // Monotonic counter so a late response from a previous input can't
+  // overwrite a newer one (see new.tsx for the longer explanation).
+  const quoteReqIdRef = useRef(0)
+
+  // Recompute the quote client-side whenever a price-relevant field
+  // changes in the edit form. Mirrors the live preview on the new-order
+  // page so the Trip Summary number updates as the PM tweaks bags or
+  // time window. 200ms debounce.
+  useEffect(() => {
+    const totalBags =
+      (Number(form.bagsRegular) || 0) + (Number(form.bagsOdd) || 0)
+    if (!form.serviceType || totalBags <= 0) return
+    const myReqId = ++quoteReqIdRef.current
+    const t = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          serviceType: form.serviceType,
+          bagsRegular: String(Number(form.bagsRegular) || 0),
+          bagsOdd: String(Number(form.bagsOdd) || 0),
+          timeWindow: form.timeWindow,
+          pickupAddress: form.pickupAddress,
+          deliveryAddress: form.deliveryAddress,
+          _: String(Date.now()),
+        })
+        const res = await fetch(
+          `/api/partners/iceland-travel/quote?${params.toString()}`,
+          { cache: 'no-store' },
+        )
+        if (myReqId !== quoteReqIdRef.current) return // stale
+        if (!res.ok) return
+        const data = (await res.json()) as { quote: PriceQuote }
+        if (myReqId !== quoteReqIdRef.current) return
+        setQuote(data.quote)
+      } catch {
+        /* aborted by next change — ignore */
+      }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [
+    form.serviceType,
+    form.bagsRegular,
+    form.bagsOdd,
+    form.timeWindow,
+    form.pickupAddress,
+    form.deliveryAddress,
+  ])
 
   const baseline = orderToForm(original)
   const changes = diff(baseline, form)
@@ -476,7 +600,7 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
               </Select>
             </div>
             <div>
-              <Label>Pickup date</Label>
+              <Label>Date of service</Label>
               <Input
                 type="date"
                 value={form.pickupDate}
@@ -745,11 +869,25 @@ export default function PartnerOrderPage({ partnerDisplayName, order }: Props) {
             <CardTitle>Trip summary</CardTitle>
             <KV>
               <KVLabel>Order #</KVLabel>
-              <KVValue>{original.orderNoInt || original.orderNoShort}</KVValue>
+              <KVValue>{original.orderNoShort}</KVValue>
             </KV>
             <KV>
               <KVLabel>Total bags</KVLabel>
               <KVValue>{totalBags}</KVValue>
+            </KV>
+            <KV>
+              <KVLabel>Estimated price</KVLabel>
+              <KVValue>
+                {quote.kind === 'priced' ? (
+                  <span title={quote.lineItems.map((li) => `${li.label}: ${formatIsk(li.amountIsk)}`).join('\n')}>
+                    {formatIsk(quote.totalIsk)}
+                  </span>
+                ) : (
+                  <span style={{ color: '#92400e' }} title={quote.reason}>
+                    We'll quote
+                  </span>
+                )}
+              </KVValue>
             </KV>
             <KV>
               <KVLabel>Pickup</KVLabel>

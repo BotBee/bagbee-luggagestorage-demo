@@ -2,7 +2,7 @@ import styled from '@emotion/styled'
 import { GetServerSideProps } from 'next'
 import { useEffect, useMemo, useState } from 'react'
 import PartnerLayout from '../../../components/partners/PartnerLayout'
-import { PARTNERS, verifyPartner } from '../../../utils/partnerAuth'
+import { PARTNERS, verifySession } from '../../../utils/partnerAuth'
 import {
   computeKpis,
   Kpis,
@@ -12,6 +12,12 @@ import {
 
 type Props = {
   partnerDisplayName: string
+  // Email of the signed-in staffer (from the verified session cookie). The
+  // "My orders" filter and new-order-form autofill both default to this;
+  // users can override on the dashboard if they're booking on behalf of a
+  // colleague. Legacy shared-password sessions get a "legacy@…" tag which
+  // the UI treats as "not signed in as a specific person".
+  sessionEmail: string
   initialOrders: OrderSummary[]
   initialKpis: Kpis
 }
@@ -29,12 +35,19 @@ const sortDispatcherOrder = (a: OrderSummary, b: OrderSummary) => {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const partner = verifyPartner(ctx.req)
-  if (partner !== 'iceland-travel') {
+  const session = verifySession(ctx.req)
+  if (!session || session.partnerId !== 'iceland-travel') {
     return {
       redirect: { destination: '/partners/iceland-travel/login', permanent: false },
     }
   }
+  const partner = session.partnerId
+  // Legacy shared-password sessions are tagged `legacy@iceland-travel.local`
+  // (see setPartnerCookie). Surface empty string for those so the UI doesn't
+  // pre-populate the "My orders" email box with a synthetic address.
+  const sessionEmail = session.email.startsWith('legacy@')
+    ? ''
+    : session.email
   try {
     const orders = await listPartnerOrders('iceland-travel')
     orders.sort(sortDispatcherOrder)
@@ -42,6 +55,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     return {
       props: {
         partnerDisplayName: PARTNERS[partner].displayName,
+        sessionEmail,
         initialOrders: orders,
         initialKpis: kpis,
       },
@@ -51,6 +65,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     return {
       props: {
         partnerDisplayName: PARTNERS[partner].displayName,
+        sessionEmail,
         initialOrders: [],
         initialKpis: computeKpis([]),
       },
@@ -139,13 +154,39 @@ const Search = styled.input`
   font-family: 'Poppins', sans-serif;
   font-size: 13px;
   padding: 9px 12px 9px 36px;
-  width: 260px;
+  width: 240px;
   border-radius: 10px;
   border: 1px solid #d9dde2;
   outline: none;
   background: white url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg' stroke='%23696f79' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E")
     10px center / 16px 16px no-repeat;
   &:focus { border-color: #3d7165; }
+  @media (max-width: 720px) {
+    width: 100%;
+  }
+`
+
+const StaffEmailBox = styled.div`
+  display: flex;
+  align-items: center;
+  @media (max-width: 720px) {
+    width: 100%;
+  }
+`
+
+const StaffEmailInput = styled.input`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  padding: 9px 12px;
+  width: 220px;
+  border-radius: 10px;
+  border: 1px solid #d9dde2;
+  background: white;
+  outline: none;
+  &:focus { border-color: #3d7165; }
+  @media (max-width: 720px) {
+    width: 100%;
+  }
 `
 
 const Pill = styled('button', {
@@ -370,9 +411,8 @@ const EmptySub = styled.div`
 `
 
 // Locale-free formatters (avoid hydration mismatches from Intl ICU drift).
-const MONTHS_SHORT = [
-  'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
-]
+// Iceland Travel uses dd/mm/yyyy — keep displays consistent across staff
+// devices regardless of OS locale.
 const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 const fmtDateShort = (s: string | null) => {
@@ -380,7 +420,8 @@ const fmtDateShort = (s: string | null) => {
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
   const dd = String(d.getUTCDate()).padStart(2, '0')
-  return `${dd} ${MONTHS_SHORT[d.getUTCMonth()]}`
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getUTCFullYear()}`
 }
 
 const fmtDateWeekday = (s: string | null) => {
@@ -441,8 +482,16 @@ const matchesFilter = (filter: StatusFilter, o: OrderSummary): boolean => {
   return true
 }
 
+// localStorage key that holds the staffer's email for this browser. The
+// portal still uses a shared partner password (single Iceland Travel
+// session) — this is purely a per-browser tag the staffer types once so
+// the dashboard can filter to "my orders" and the new-order form can
+// autofill their contact email.
+const STAFF_EMAIL_KEY = 'bb_partner_staff_email'
+
 export default function PartnerDashboard({
   partnerDisplayName,
+  sessionEmail,
   initialOrders,
   initialKpis,
 }: Props) {
@@ -450,6 +499,38 @@ export default function PartnerDashboard({
   const [kpis, setKpis] = useState<Kpis>(initialKpis)
   const [filter, setFilter] = useState<StatusFilter>('upcoming')
   const [query, setQuery] = useState('')
+  // Default to the verified session email (set by the email-code login).
+  // If there's no session email (legacy password login), fall back to the
+  // browser-local tag in localStorage. The user can still type a different
+  // email into the input to override either.
+  const [staffEmail, setStaffEmail] = useState(sessionEmail)
+  const [mineOnly, setMineOnly] = useState(false)
+
+  // For legacy sessions only: load the staffer email from localStorage on
+  // mount. New email-code logins already populate staffEmail from
+  // sessionEmail at first render, so we don't overwrite that here.
+  useEffect(() => {
+    if (sessionEmail) return
+    try {
+      const saved = window.localStorage.getItem(STAFF_EMAIL_KEY)
+      if (saved) setStaffEmail(saved)
+    } catch {
+      /* localStorage blocked — silently ignore */
+    }
+  }, [sessionEmail])
+
+  const persistStaffEmail = (val: string) => {
+    setStaffEmail(val)
+    try {
+      if (val.trim()) {
+        window.localStorage.setItem(STAFF_EMAIL_KEY, val.trim())
+      } else {
+        window.localStorage.removeItem(STAFF_EMAIL_KEY)
+      }
+    } catch {
+      /* localStorage blocked — silently ignore */
+    }
+  }
 
   // Background refresh so dispatcher status changes show up automatically.
   useEffect(() => {
@@ -469,8 +550,13 @@ export default function PartnerDashboard({
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const myEmail = staffEmail.trim().toLowerCase()
     return orders.filter((o) => {
       if (!matchesFilter(filter, o)) return false
+      if (mineOnly && myEmail) {
+        const ordEmail = (o.email || '').trim().toLowerCase()
+        if (ordEmail !== myEmail) return false
+      }
       if (!q) return true
       // Reference number is what Iceland Travel staff actually search by,
       // so it gets first priority. Other fields are a fallback so the box
@@ -492,7 +578,7 @@ export default function PartnerDashboard({
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [orders, filter, query])
+  }, [orders, filter, query, mineOnly, staffEmail])
 
   return (
     <PartnerLayout partnerDisplayName={partnerDisplayName}>
@@ -519,11 +605,39 @@ export default function PartnerDashboard({
       <SectionHead>
         <SectionTitle>Orders</SectionTitle>
         <Toolbar>
+          {/* For session-authenticated users the login email IS the source
+              of truth — no input box needed. The text-entry box only shows
+              for legacy shared-password sessions (sessionEmail empty) so
+              those users can still self-tag for "My projects". */}
+          {!sessionEmail && (
+            <StaffEmailBox>
+              <StaffEmailInput
+                type="email"
+                placeholder="Your email (for My projects)"
+                value={staffEmail}
+                onChange={(e) => persistStaffEmail(e.target.value)}
+                spellCheck={false}
+                autoCapitalize="off"
+              />
+            </StaffEmailBox>
+          )}
           <Search
             placeholder="Search by your reference number…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <Pill
+            isActive={mineOnly}
+            onClick={() => setMineOnly((v) => !v)}
+            disabled={!staffEmail.trim()}
+            title={
+              staffEmail.trim()
+                ? `Show only bookings under ${staffEmail}`
+                : 'Type your email first'
+            }
+          >
+            My projects
+          </Pill>
           {(
             [
               ['upcoming', 'Upcoming'],
@@ -552,7 +666,7 @@ export default function PartnerDashboard({
             <thead>
               <tr>
                 <Th>Ref #</Th>
-                <Th>Pickup</Th>
+                <Th>Date of service</Th>
                 <Th>Service</Th>
                 <Th>From</Th>
                 <Th>To</Th>

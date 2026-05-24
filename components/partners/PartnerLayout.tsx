@@ -2,6 +2,7 @@ import styled from '@emotion/styled'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { ReactNode } from 'react'
+import Logo from '../../public/icons/Logo'
 
 const Wrapper = styled.div`
   min-height: 100vh;
@@ -36,60 +37,41 @@ const TopBarInner = styled.div`
 
 const Brand = styled.div`
   display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  @media (max-width: ${MOBILE}) {
-    gap: 8px;
-  }
-`
-
-const BrandLogo = styled.div`
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #3d7165;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-family: 'Poppins', sans-serif;
-  letter-spacing: -0.3px;
-  font-size: 14px;
-  flex-shrink: 0;
-  @media (max-width: ${MOBILE}) {
-    width: 30px;
-    height: 30px;
-    font-size: 12px;
-    border-radius: 7px;
-  }
-`
-
-const BrandText = styled.div`
-  display: flex;
   flex-direction: column;
-  line-height: 1.1;
-  font-family: 'Poppins', sans-serif;
+  align-items: flex-start;
+  gap: 0;
+  line-height: 1;
   min-width: 0;
 `
 
-const BrandTitle = styled.div`
-  font-size: 15px;
-  font-weight: 700;
-  color: #000929;
-  white-space: nowrap;
+// The Logo SVG component renders the "BagBee" word-mark in F3AD3C orange.
+// We scale it down for the topbar slot — by default it's 106×30; the
+// wrapper just adjusts the visible width so it sits nicely with the
+// "Partner portal" caption underneath.
+const LogoMark = styled.div`
+  display: flex;
+  align-items: center;
+  & svg {
+    height: 22px;
+    width: auto;
+  }
   @media (max-width: ${MOBILE}) {
-    font-size: 13px;
+    & svg {
+      height: 18px;
+    }
   }
 `
 
 const BrandSubtitle = styled.div`
-  font-size: 11px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   color: #696f79;
-  white-space: nowrap;
+  margin-top: 2px;
   @media (max-width: ${MOBILE}) {
-    display: none;
+    font-size: 9px;
   }
 `
 
@@ -165,10 +147,12 @@ const Footer = styled.footer`
 `
 
 export const PartnerLayout = ({
-  partnerDisplayName,
   children,
 }: {
-  partnerDisplayName: string
+  // Accepted but currently unused — the topbar shows the BagBee logo
+  // + "Partner portal" caption instead of the agency name. Kept on the
+  // signature so callers (dashboard, login, order pages) don't break.
+  partnerDisplayName?: string
   children: ReactNode
 }) => {
   const router = useRouter()
@@ -186,11 +170,10 @@ export const PartnerLayout = ({
       <TopBar>
         <TopBarInner>
           <Brand>
-            <BrandLogo>BB</BrandLogo>
-            <BrandText>
-              <BrandTitle>BagBee Partner Portal</BrandTitle>
-              <BrandSubtitle>{partnerDisplayName}</BrandSubtitle>
-            </BrandText>
+            <LogoMark>
+              <Logo fill="#3d7165" />
+            </LogoMark>
+            <BrandSubtitle>Partner portal</BrandSubtitle>
           </Brand>
           <Nav>
             <NavLink

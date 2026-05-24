@@ -36,10 +36,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pickupAddress: order.pickupAddress,
       deliveryAddress: order.deliveryAddress,
       // Drag-to-fix override — when set, supersedes the geocoder so the
-      // map respects the partner's manual placement.
+      // map respects the partner's manual placement (for both ends).
       pickupOverride:
         order.pickupLatOverride != null && order.pickupLngOverride != null
           ? { lat: order.pickupLatOverride, lng: order.pickupLngOverride }
+          : null,
+      deliveryOverride:
+        order.deliveryLatOverride != null && order.deliveryLngOverride != null
+          ? { lat: order.deliveryLatOverride, lng: order.deliveryLngOverride }
           : null,
     })
     const body: TrackingResponse = {

@@ -1,10 +1,19 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { requirePartner } from '../../../../../../utils/partnerAuth'
+import {
+  PARTNERS,
+  requirePartner,
+  verifySession,
+} from '../../../../../../utils/partnerAuth'
 import {
   EditableField,
   getPartnerOrder,
   updatePartnerOrder,
 } from '../../../../../../utils/partnerOrders'
+import {
+  sendOrderUpdateNotice,
+  UpdateDiff,
+} from '../../../../../../utils/partnerNotifications'
+import { normalizePhone } from '../../../../../../utils/phoneNormalize'
 
 const PARTNER_ID = 'iceland-travel' as const
 
@@ -18,6 +27,8 @@ const EDITABLE_KEYS: EditableField[] = [
   'pickupAddress',
   'pickupLatOverride',
   'pickupLngOverride',
+  'deliveryLatOverride',
+  'deliveryLngOverride',
   'deliveryAddress',
   'deliveryDate',
   'deliveryTimeWindow',
@@ -44,7 +55,12 @@ const sanitizeChanges = (
       if (Number.isFinite(n) && n >= 0) out[key] = Math.floor(n)
       continue
     }
-    if (key === 'pickupLatOverride' || key === 'pickupLngOverride') {
+    if (
+      key === 'pickupLatOverride' ||
+      key === 'pickupLngOverride' ||
+      key === 'deliveryLatOverride' ||
+      key === 'deliveryLngOverride'
+    ) {
       // Decimal degrees — keep precision; sanity-check bounds (Iceland
       // fits comfortably inside -90..90 / -180..180).
       if (v == null || v === '') {
@@ -52,8 +68,21 @@ const sanitizeChanges = (
         continue
       }
       const n = typeof v === 'number' ? v : Number(v)
-      const limit = key === 'pickupLatOverride' ? 90 : 180
+      const isLat = key === 'pickupLatOverride' || key === 'deliveryLatOverride'
+      const limit = isLat ? 90 : 180
       if (Number.isFinite(n) && Math.abs(n) <= limit) out[key] = n
+      continue
+    }
+    if (key === 'phone') {
+      // Always store phones as E.164 (+<cc><number>) regardless of
+      // how the partner typed them — downstream SMS / dispatch flows
+      // depend on a stable format. Pass empty in if the field was
+      // cleared so we still null it out.
+      if (v == null || v === '') {
+        out[key] = null
+      } else if (typeof v === 'string') {
+        out[key] = normalizePhone(v)
+      }
       continue
     }
     if (v == null) {
@@ -92,8 +121,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'No editable changes supplied' })
     }
     try {
+      // Pull the pre-change row so the email diff can show before/after.
+      // If this fails, we still let the update proceed — we just send
+      // a less informative email (or skip it entirely).
+      const before = await getPartnerOrder(PARTNER_ID, recordId).catch(
+        () => null,
+      )
       const updated = await updatePartnerOrder(PARTNER_ID, recordId, changes, actor)
       if (!updated) return res.status(404).json({ message: 'Order not found' })
+
+      // Build the diff list from the keys the partner actually submitted.
+      // For each changed field we read the pre-change value off the
+      // OrderSummary; if `before` is null (rare — a race or Airtable hiccup)
+      // we mark the previous value as '(unknown)' so Runar still sees the
+      // change happened.
+      const diffs: UpdateDiff[] = []
+      if (before) {
+        const b = before as unknown as Record<string, unknown>
+        const a = updated as unknown as Record<string, unknown>
+        for (const key of Object.keys(changes) as EditableField[]) {
+          const bv = (b[key] ?? null) as string | number | null
+          const av = (a[key] ?? null) as string | number | null
+          // Treat empty-string == null for diff purposes; partners often
+          // toggle between "" and null when clearing a field.
+          const norm = (x: string | number | null) =>
+            x === '' || x == null ? '' : String(x)
+          if (norm(bv) !== norm(av)) {
+            diffs.push({ field: key, before: bv, after: av })
+          }
+        }
+      }
+
+      // IMPORTANT: await the notifier — on Vercel serverless, a fire-and-
+      // forget promise gets killed mid-TLS-handshake when the function
+      // returns, so the email never sends. The notifier swallows its own
+      // errors so a mail outage still doesn't fail the update.
+      const session = verifySession(req)
+      await sendOrderUpdateNotice({
+        partner: PARTNER_ID,
+        partnerDisplayName: PARTNERS[PARTNER_ID].displayName,
+        actorEmail: session?.email || 'unknown@partner',
+        actorName: actor || null,
+        order: updated,
+        diffs,
+      })
+
       return res.status(200).json({ order: updated })
     } catch (err) {
       console.error('[partner order PATCH] failed', err)
