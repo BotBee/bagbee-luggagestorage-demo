@@ -2776,16 +2776,31 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
       }
     }
 
-    // Fetch any paid Fast-Track records linked to this order, then derive the
-    // active/expired summary server-side. Doing the date comparison here (not
-    // on the client) avoids a hydration mismatch around midnight and keeps the
-    // active-through-flight-day cutoff stable for the whole page session.
+    // Fetch any paid Fast-Track records for this customer's flight (matched
+    // by email + flight date — see fast-track-by-order-no.ts for why those
+    // are the reliable keys vs the {order number} text or {Pöntunarnúmer}
+    // linked-record fields, which are blank on most paid rows). Then derive
+    // the active/expired summary server-side so the cutoff is stable for the
+    // whole page session and there's no hydration mismatch around midnight.
     let fastTrackSummary: FastTrackSummary | null = null
     try {
-      const ftRes = await fetch(
-        `${baseUrl}/api/airtable/fast-track-by-order-no?orderNo=${orderNo}`
-      )
-      if (ftRes.ok) {
+      const customerEmail = String(
+        order?.fields?.['Tölvupóstfang'] || ''
+      ).trim()
+      const orderFlightDateRaw = order?.fields?.['Dagsetning flugs']
+        ? String(order.fields['Dagsetning flugs']).slice(0, 10)
+        : ''
+      const params = new URLSearchParams({
+        email: customerEmail,
+        flightDate: orderFlightDateRaw,
+      })
+      const ftRes =
+        customerEmail && orderFlightDateRaw
+          ? await fetch(
+              `${baseUrl}/api/airtable/fast-track-by-order-no?${params.toString()}`
+            )
+          : null
+      if (ftRes && ftRes.ok) {
         const ftData = await ftRes.json()
         const rows: FastTrackRecord[] = ftData.fastTracks || []
         if (rows.length > 0) {
