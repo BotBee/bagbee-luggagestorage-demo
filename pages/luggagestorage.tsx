@@ -80,6 +80,17 @@ const CHECKIN_TIMES       = timeOptions(6,  45, 17)
 const CHECKOUT_TIMES_OPEN = timeOptions(6,  45, 17)
 const CHECKOUT_TIMES_LATE = timeOptions(17, 15, 23)
 
+/* Convert "H:MM AM/PM" → minutes since midnight for comparison */
+const parseTimeStr = (t: string): number => {
+  const m = /^(\d+):(\d+)\s+(AM|PM)$/i.exec(t.trim())
+  if (!m) return 0
+  let h = parseInt(m[1], 10)
+  const min = parseInt(m[2], 10)
+  if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12
+  if (m[3].toUpperCase() === 'AM' && h === 12) h = 0
+  return h * 60 + min
+}
+
 /* ── styled components — transport design language ───────── */
 
 const PageContainer = styled.div`
@@ -626,7 +637,17 @@ const LuggageStorage = () => {
                     <Controller
                       name='departureTime'
                       control={control}
-                      rules={{ required: 'Required' }}
+                      rules={{
+                        required: 'Required',
+                        validate: (v) => {
+                          if (!v || !values.arrivalTime) return true
+                          // Only enforce ordering on same-day storage
+                          if (values.arrivalDate && values.departureDate &&
+                              values.arrivalDate !== values.departureDate) return true
+                          return parseTimeStr(v) > parseTimeStr(values.arrivalTime) ||
+                            'Check-out must be after check-in time'
+                        },
+                      }}
                       render={({ field }) => (
                         <SelectEl
                           value={field.value}
