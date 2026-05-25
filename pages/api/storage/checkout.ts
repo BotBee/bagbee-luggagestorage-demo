@@ -5,7 +5,7 @@ import { generateRandomString, sign } from '../../../common/rapyd-helper'
 import getAppConfig from '../../../modules/config'
 
 const BSI_STORAGE_TABLE_ID = 'tblMJtxJiHFDi3TTk'
-const SITE_URL = 'https://bagbee.is'
+const SITE_URL = 'https://www.bagbee.is'
 
 const getStorageTable = (): Table<FieldSet> => {
   const {
