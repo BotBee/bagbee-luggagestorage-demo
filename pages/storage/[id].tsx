@@ -182,12 +182,12 @@ export default function StorageBookingPage() {
     if (!window.confirm('Cancel this booking? A full refund will be issued if payment was made.')) return
     setCancelling(true)
     try {
-      const payStatus = fields?.['Payment Status'] as string
-      if (payStatus === 'Paid') {
-        await axios.post('/api/storage/refund', { bookingId: id })
-      }
-      await axios.patch(`/api/storage/${id}`, { 'Payment Status': 'Cancelled' })
-      setFields((f) => ({ ...f, 'Payment Status': 'Cancelled' }))
+      // Single server endpoint handles both the Rapyd refund (if Paid) and
+      // the Airtable status update atomically. Browser never sees the
+      // refund secret.
+      const { data } = await axios.post(`/api/storage/${id}/cancel`)
+      const newStatus = (data?.status as string) || 'Cancelled'
+      setFields((f) => ({ ...f, 'Payment Status': newStatus }))
       setCancelled(true)
     } catch {
       alert('Could not cancel. Please contact bagbee@bagbee.is.')
