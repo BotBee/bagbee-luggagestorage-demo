@@ -1,8 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import Airtable, { FieldSet } from 'airtable'
 import { getFastTrackTable, getTable, minifyItems } from '../../../../utils/airtable'
 import { sign } from '../../../../common/rapyd-helper'
 import { maybeSendPaydayInvoiceForOrder } from '../../../../utils/paydayInvoice'
+import getAppConfig from '../../../../modules/config'
 import { Readable } from 'stream'
+
+const BSI_STORAGE_TABLE_ID = 'tblMJtxJiHFDi3TTk'
 
 export const config = {
   api: {
@@ -52,9 +56,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Invalid signature' })
     }
 
-    if (request.type === 'PAYMENT_COMPLETED') {
+    if (request.type === 'PAYMENT_COMPLETED' || request.type === 'CHECKOUT_PAYMENT_COMPLETED') {
       console.log('[api][payment][webhooks] metadata:', request.data.metadata)
       console.log('[api][payment][webhooks] payment id:', request.data.id)
+
+      // Storage booking — identified by metadata.bookingId
+      const bookingId: string | undefined =
+        request.data.metadata?.bookingId || request.data.payment?.metadata?.bookingId
+      if (bookingId) {
+        const paymentId: string | undefined = request.data.id || request.data.payment?.id
+        try {
+          const {
+            serverRuntimeConfig: { airtableAccessToken, airtableBaseId, airtableEndpointUrl },
+          } = getAppConfig()
+          Airtable.configure({ apiKey: airtableAccessToken, endpointUrl: airtableEndpointUrl })
+          const table = Airtable.base(airtableBaseId)(BSI_STORAGE_TABLE_ID)
+          await table.update(bookingId, {
+            'Payment Status': 'Paid',
+            ...(paymentId ? { 'Rapyd Payment ID': paymentId } : {}),
+          } as FieldSet)
+          console.log('[api][payment][webhooks] storage booking marked paid:', bookingId)
+        } catch (error) {
+          console.error('[api][payment][webhooks] Error marking storage booking paid', error)
+          return res.status(500).json({ message: 'Error updating storage paid status' })
+        }
+        return res.status(200).json({ message: 'Payment success' })
+      }
+
+      // Regular baggage / fast-track booking
       const billingCountry = extractBillingCountry(request.data)
       console.log('[api][payment][webhooks] billing country:', billingCountry ?? '(not found)')
       try {

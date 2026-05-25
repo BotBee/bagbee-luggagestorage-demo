@@ -29,8 +29,6 @@ const createRapydCheckout = (
     language: 'EN',
     complete_payment_url: `${SITE_URL}/storage/payment-success?bookingId=${bookingId}`,
     error_payment_url: `${SITE_URL}/storage/payment-cancel?bookingId=${bookingId}`,
-    // Server-side fallback: marks payment Paid even if browser redirect fails
-    webhook_url: `${SITE_URL}/api/storage/rapyd-webhook`,
     metadata: { bookingId },
   }
   const salt = generateRandomString(8)
