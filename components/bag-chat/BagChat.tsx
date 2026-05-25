@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import styled from '@emotion/styled'
+import { useRouter } from 'next/router'
 import { strings, Locale } from './strings'
 
 type ChatMessage = {
@@ -13,20 +14,15 @@ const API_BASE = process.env.NEXT_PUBLIC_CHAT_API_URL || 'https://botbee-webhook
 const STORAGE_KEY = 'bagbee_chat_session'
 const POLL_MS = 4000
 
-function detectLocale(): Locale {
-  if (typeof window === 'undefined') return 'is'
-  const htmlLang = document.documentElement.lang
-  if (htmlLang?.startsWith('en')) return 'en'
-  return 'is'
-}
-
 function localId() {
   return 'local_' + Math.random().toString(36).slice(2, 10)
 }
 
 export default function BagChat() {
+  const router = useRouter()
+  const routerLocale: Locale = router.locale === 'en' ? 'en' : 'is'
   const [open, setOpen] = useState(false)
-  const [locale, setLocale] = useState<Locale>('is')
+  const [locale, setLocale] = useState<Locale>(routerLocale)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -36,9 +32,13 @@ export default function BagChat() {
   const listRef = useRef<HTMLDivElement>(null)
   const t = strings[locale]
 
+  // Sync locale when the page locale changes (user navigates between /en and /is)
+  useEffect(() => {
+    setLocale(routerLocale)
+  }, [routerLocale])
+
   // Restore or create session on mount
   useEffect(() => {
-    setLocale(detectLocale())
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       try {
