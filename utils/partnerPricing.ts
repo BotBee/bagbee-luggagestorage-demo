@@ -314,6 +314,28 @@ export const parseStartHour = (timeWindow: string | null): number | null => {
   return h
 }
 
+// -------------------- forward-year pricing disclaimer --------------------
+//
+// When the Date of Service lands in a future calendar year, the pricelist
+// rates we quote today may not still apply by the time we actually deliver
+// the bags — prices roll over annually with the partner contracts. Surface
+// a "prices may change" banner alongside the quote so the partner staffer
+// and Runar both know the number is provisional.
+//
+// Threshold is naturally future-proof: anything in a year > current UTC
+// year qualifies. Today (2026) → 2027+ is tentative. Once we roll over
+// into 2027 → only 2028+ qualifies, no maintenance needed.
+export const hasTentativePricing = (
+  pickupDateYmd: string | null | undefined,
+): boolean => {
+  if (!pickupDateYmd) return false
+  const m = /^(\d{4})-/.exec(pickupDateYmd)
+  if (!m) return false
+  const year = Number(m[1])
+  if (!Number.isFinite(year)) return false
+  return year > new Date().getUTCFullYear()
+}
+
 // -------------------- main calculator --------------------
 
 export type PriceInput = {

@@ -19,7 +19,7 @@
 
 import { PartnerId } from './partnerAuth'
 import { OrderSummary } from './partnerOrders'
-import { computeOrderPrice, formatIsk } from './partnerPricing'
+import { computeOrderPrice, formatIsk, hasTentativePricing } from './partnerPricing'
 import nodemailer, { Transporter } from 'nodemailer'
 
 const FROM_NAME = 'BagBee Partner Portal'
@@ -183,6 +183,18 @@ const renderPriceBlockHtml = async (
       pickupAddress: order.pickupAddress,
       deliveryAddress: order.deliveryAddress,
     })
+    // Future-year disclaimer — same logic as the partner-facing UI. The
+    // approver gets it in the email so they remember to confirm the price
+    // before sending the customer confirmation.
+    const tentative = hasTentativePricing(order.pickupDate)
+    const tentativeBanner = tentative
+      ? `<div style="margin:0 0 10px;padding:8px 12px;background:#fff8e6;border-left:3px solid #e0c878;border-radius:4px;font-size:12px;color:#6f5a14;">
+          Date of service is in a future calendar year — quoted price is
+          provisional and may need revision if the pricelist is updated
+          before delivery.
+        </div>`
+      : ''
+
     if (quote.kind === 'priced') {
       const lines = quote.lineItems
         .map(
@@ -191,15 +203,17 @@ const renderPriceBlockHtml = async (
         )
         .join('')
       return `<div style="margin:14px 0;padding:14px 16px;background:#f1f7f5;border:1px solid #3d7165;border-radius:10px;">
-        <div style="font-size:11px;color:#696f79;text-transform:uppercase;letter-spacing:0.4px;">Auto-quote from pricelist</div>
-        <div style="font-size:22px;font-weight:700;color:#000929;margin:4px 0 8px;">${escapeHtml(formatIsk(quote.totalIsk))}</div>
+        <div style="font-size:11px;color:#696f79;text-transform:uppercase;letter-spacing:0.4px;">Auto-quote from pricelist${tentative ? ' · provisional' : ''}</div>
+        <div style="font-size:22px;font-weight:700;color:#000929;margin:4px 0 8px;">${escapeHtml(formatIsk(quote.totalIsk))}${tentative ? '<span style="color:#92400e;font-size:14px;margin-left:6px;font-weight:600;">*</span>' : ''}</div>
         <table style="border-collapse:collapse;">${lines}</table>
         <div style="font-size:11px;color:#696f79;margin-top:8px;">Pricelist row: ${escapeHtml(quote.pricelistRowName)} · ${quote.pax} pax</div>
+        ${tentativeBanner}
       </div>`
     }
     return `<div style="margin:14px 0;padding:14px 16px;background:#fff8e6;border:1px solid #e0c878;border-radius:10px;">
       <div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:0.4px;">Outside the standard pricelist</div>
       <div style="font-size:13px;color:#6f5a14;margin-top:6px;">${escapeHtml(quote.reason)}</div>
+      ${tentativeBanner}
     </div>`
   } catch (err) {
     console.error('[partnerNotifications] price calc failed for email', err)

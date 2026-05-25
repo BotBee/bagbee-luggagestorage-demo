@@ -14,6 +14,7 @@ import {
 import {
   computeOrderPrice,
   formatIsk,
+  hasTentativePricing,
   PriceQuote,
   PricelistCustomer,
 } from '../../../../utils/partnerPricing'
@@ -895,6 +896,14 @@ export default function PartnerOrderPage({
                 {quote.kind === 'priced' ? (
                   <span title={quote.lineItems.map((li) => `${li.label}: ${formatIsk(li.amountIsk)}`).join('\n')}>
                     {formatIsk(quote.totalIsk)}
+                    {hasTentativePricing(form.pickupDate) && (
+                      <span
+                        style={{ color: '#92400e', fontSize: 11, marginLeft: 6 }}
+                        title="Future-year booking — current pricelist may not still apply at delivery."
+                      >
+                        *
+                      </span>
+                    )}
                   </span>
                 ) : (
                   <span style={{ color: '#92400e' }} title={quote.reason}>
@@ -903,6 +912,22 @@ export default function PartnerOrderPage({
                 )}
               </KVValue>
             </KV>
+            {hasTentativePricing(form.pickupDate) && (
+              <KV style={{ borderBottom: 'none' }}>
+                <KVValue
+                  style={{
+                    fontSize: 11,
+                    color: '#6f5a14',
+                    textAlign: 'left',
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  *Future-year booking — quoted price is provisional and may be
+                  revised if the pricelist is updated before the date of service.
+                </KVValue>
+              </KV>
+            )}
             <KV>
               <KVLabel>Pickup</KVLabel>
               <KVValue>

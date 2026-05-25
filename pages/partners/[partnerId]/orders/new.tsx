@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import PartnerLayout from '../../../../components/partners/PartnerLayout'
 import { PARTNERS, PartnerId, isPartnerId, verifySession } from '../../../../utils/partnerAuth'
 import { OrderSummary } from '../../../../utils/partnerOrders'
+import { hasTentativePricing } from '../../../../utils/partnerPricing'
 
 type Props = { partnerId: PartnerId; partnerDisplayName: string; sessionEmail: string }
 
@@ -256,6 +257,22 @@ const QuoteLine = styled.div`
 const QuoteReason = styled.div`
   font-size: 13px;
   color: #6f5a14;
+  line-height: 1.5;
+`
+
+// Shown when the Date of Service is in a future calendar year — current
+// pricelist may not still apply by then. Style intentionally subtle (no
+// gradient / no icon / no shouting) so it's informative rather than
+// alarming. Sits directly under the quote card.
+const FuturePricingNotice = styled.div`
+  margin: -10px 0 18px;
+  padding: 10px 14px;
+  background: #f7f8fa;
+  border-left: 3px solid #a3a4a7;
+  border-radius: 6px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  color: #5b626c;
   line-height: 1.5;
 `
 
@@ -654,6 +671,18 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
               <QuoteCard kind="manual">
                 <QuoteCaption>Calculating price…</QuoteCaption>
               </QuoteCard>
+            )}
+
+            {/* Forward-year disclaimer — appears regardless of whether the
+                quote came back priced or "We'll quote", because future-year
+                prices are tentative either way. Driven purely off the
+                pickupDate value (no server roundtrip needed). */}
+            {hasTentativePricing(form.pickupDate) && (
+              <FuturePricingNotice>
+                Heads up — this booking is for a future calendar year. The
+                quoted price is provisional and may be revised before delivery
+                if our pricelist is updated in the meantime.
+              </FuturePricingNotice>
             )}
 
             <Field>
