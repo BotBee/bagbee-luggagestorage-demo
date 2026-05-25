@@ -3,15 +3,23 @@ import { GetServerSideProps } from 'next'
 import { useRouter } from 'next/router'
 import { useEffect, useRef, useState } from 'react'
 import BagBeeLogo from '../../../public/icons/Logo'
-import { verifyPartner } from '../../../utils/partnerAuth'
+import { PARTNERS, PartnerId, isPartnerId, verifyPartner } from '../../../utils/partnerAuth'
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  if (verifyPartner(ctx.req) === 'iceland-travel') {
+type Props = { partnerId: PartnerId; partnerDisplayName: string }
+
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const partnerSlug = ctx.params?.partnerId
+  if (!isPartnerId(partnerSlug)) return { notFound: true }
+  const partnerId = partnerSlug
+  // If already logged in to THIS partner, jump to the dashboard.
+  if (verifyPartner(ctx.req) === partnerId) {
     return {
-      redirect: { destination: '/partners/iceland-travel/dashboard', permanent: false },
+      redirect: { destination: `/partners/${partnerId}/dashboard`, permanent: false },
     }
   }
-  return { props: {} }
+  return {
+    props: { partnerId, partnerDisplayName: PARTNERS[partnerId].displayName },
+  }
 }
 
 const Page = styled.div`
@@ -181,7 +189,7 @@ const EmailValue = styled.span`
 
 type Step = 'email' | 'code'
 
-export default function PartnerLogin() {
+export default function PartnerLogin({ partnerId, partnerDisplayName }: Props) {
   const router = useRouter()
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -204,7 +212,7 @@ export default function PartnerLogin() {
     setError(null)
     setInfo(null)
     try {
-      const res = await fetch('/api/partners/iceland-travel/request-code', {
+      const res = await fetch(`/api/partners/${partnerId}/request-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -230,7 +238,7 @@ export default function PartnerLogin() {
     setError(null)
     setInfo(null)
     try {
-      const res = await fetch('/api/partners/iceland-travel/verify-code', {
+      const res = await fetch(`/api/partners/${partnerId}/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
@@ -243,7 +251,7 @@ export default function PartnerLogin() {
       }
       // Logged in — go straight to the dashboard. The dashboard's
       // getServerSideProps will see the session cookie and load orders.
-      router.replace('/partners/iceland-travel/dashboard')
+      router.replace(`/partners/${partnerId}/dashboard`)
     } catch (err) {
       setError('Network error — please try again.')
       setLoading(false)
@@ -255,7 +263,7 @@ export default function PartnerLogin() {
     setError(null)
     setInfo(null)
     try {
-      const res = await fetch('/api/partners/iceland-travel/request-code', {
+      const res = await fetch(`/api/partners/${partnerId}/request-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -287,7 +295,7 @@ export default function PartnerLogin() {
         <LogoMark>
           <BagBeeLogo fill="#3d7165" />
         </LogoMark>
-        <Title>Iceland Travel</Title>
+        <Title>{partnerDisplayName}</Title>
         <Sub>Partner portal · sign in with a code emailed to you</Sub>
 
         {step === 'email' ? (

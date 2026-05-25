@@ -5,6 +5,7 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api'
 import { useEffect, useMemo, useState } from 'react'
+import { PartnerId } from '../../utils/partnerAuth'
 
 // Mirrors @react-google-maps's loader options — pin the libraries list so
 // every callsite shares the same loader instance and the SDK doesn't warn
@@ -94,6 +95,7 @@ const ResetButton = styled.button`
 `
 
 type Props = {
+  partnerId: PartnerId
   orderId: string
   // When true, render the slim sidebar variant (shorter map, no hint).
   compact?: boolean
@@ -115,6 +117,7 @@ type TrackingPayload = {
 const ICELAND_DEFAULT_CENTER = { lat: 64.13, lng: -21.94 }
 
 export const OrderTrackingMap = ({
+  partnerId,
   orderId,
   compact = false,
   onPickupMoved,
@@ -149,7 +152,7 @@ export const OrderTrackingMap = ({
     const load = async () => {
       try {
         const res = await fetch(
-          `/api/partners/iceland-travel/orders/${orderId}/tracking`,
+          `/api/partners/${partnerId}/orders/${orderId}/tracking`,
         )
         if (!res.ok) {
           if (!cancelled) setLoadingTracking(false)
@@ -202,7 +205,7 @@ export const OrderTrackingMap = ({
         kind === 'pickup'
           ? { pickupLatOverride: coords.lat, pickupLngOverride: coords.lng }
           : { deliveryLatOverride: coords.lat, deliveryLngOverride: coords.lng }
-      const res = await fetch(`/api/partners/iceland-travel/orders/${orderId}`, {
+      const res = await fetch(`/api/partners/${partnerId}/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ changes, actor: `${kind}-pin-drag` }),
@@ -227,7 +230,7 @@ export const OrderTrackingMap = ({
         kind === 'pickup'
           ? { pickupLatOverride: null, pickupLngOverride: null }
           : { deliveryLatOverride: null, deliveryLngOverride: null }
-      const res = await fetch(`/api/partners/iceland-travel/orders/${orderId}`, {
+      const res = await fetch(`/api/partners/${partnerId}/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ changes, actor: `${kind}-pin-reset` }),
@@ -238,7 +241,7 @@ export const OrderTrackingMap = ({
       }
       // Refetch so the server's re-geocoded coords replace our optimistic one.
       const fresh = await fetch(
-        `/api/partners/iceland-travel/orders/${orderId}/tracking`,
+        `/api/partners/${partnerId}/orders/${orderId}/tracking`,
       )
       if (fresh.ok) {
         const data = await fresh.json()

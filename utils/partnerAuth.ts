@@ -30,12 +30,20 @@ const PENDING_COOKIE_VERSION = 'p1'
 // invalidated and the user must request a fresh code.
 export const MAX_CODE_ATTEMPTS = 5
 
-export type PartnerId = 'iceland-travel'
+// Partner registry. Adding a new partner is a single config block here —
+// the pages + API routes are parameterized on `partnerId` so no per-partner
+// code lives anywhere else (see /pages/partners/[partnerId]/* and
+// /pages/api/partners/[partnerId]/*). The URL slug, Airtable agency name,
+// and login domains are all stored on the entry.
+export type PartnerId = 'iceland-travel' | 'atlantik'
 
 export const PARTNERS: Record<
   PartnerId,
   {
     displayName: string
+    // Exact value in Airtable column "Nafn viðskiptavinar"
+    // (fldAqtOvVsGju0Vhy) used to scope reads + writes. Must match
+    // letter-for-letter how ops stamps the customer name.
     agencyName: string
     // Whitelisted email domains. A login email must end with `@<one of these>`
     // (case-insensitive) for the request-code endpoint to even mail a code.
@@ -44,11 +52,21 @@ export const PARTNERS: Record<
 > = {
   'iceland-travel': {
     displayName: 'Iceland Travel',
-    // Exact value in Airtable field fldAqtOvVsGju0Vhy used for scoping reads/writes.
     agencyName: 'Iceland Travel',
     allowedDomains: ['icelandtravel.is', 'bagbee.is'],
   },
+  atlantik: {
+    displayName: 'Atlantik',
+    agencyName: 'Atlantik',
+    allowedDomains: ['atlantik.is', 'bagbee.is'],
+  },
 }
+
+// Type guard for validating a URL slug from the dynamic-route param. Every
+// page + API route under /partners/[partnerId]/* calls this to reject
+// unknown partners (e.g. someone trying /partners/random-string/dashboard).
+export const isPartnerId = (slug: unknown): slug is PartnerId =>
+  typeof slug === 'string' && slug in PARTNERS
 
 const getSecret = (): string => {
   const secret = process.env.PARTNER_COOKIE_SECRET

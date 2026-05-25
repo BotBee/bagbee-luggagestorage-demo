@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import PartnerLayout from '../../../../components/partners/PartnerLayout'
 import OrderTrackingMap from '../../../../components/partners/OrderTrackingMap'
 import DriverMessageBar from '../../../../components/partners/DriverMessageBar'
-import { PARTNERS, verifyPartner } from '../../../../utils/partnerAuth'
+import { PARTNERS, PartnerId, isPartnerId, verifyPartner } from '../../../../utils/partnerAuth'
 import {
   EditableField,
   getPartnerOrder,
@@ -15,9 +15,19 @@ import {
   computeOrderPrice,
   formatIsk,
   PriceQuote,
+  PricelistCustomer,
 } from '../../../../utils/partnerPricing'
 
+// Same map as in /api/.../quote.ts — keeps the URL slug → pricelist Customer
+// translation in one place per file rather than crossing module boundaries
+// just for two entries.
+const PRICELIST_CUSTOMER: Record<PartnerId, PricelistCustomer> = {
+  'iceland-travel': 'Iceland Travel',
+  atlantik: 'Atlantik',
+}
+
 type Props = {
+  partnerId: PartnerId
   partnerDisplayName: string
   order: OrderSummary
   // Pre-computed quote for this order's current state. Re-runs client-side
@@ -27,15 +37,17 @@ type Props = {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const partner = verifyPartner(ctx.req)
-  if (partner !== 'iceland-travel') {
+  const partnerSlug = ctx.params?.partnerId
+  if (!isPartnerId(partnerSlug)) return { notFound: true }
+  const partnerId = partnerSlug
+  if (verifyPartner(ctx.req) !== partnerId) {
     return {
-      redirect: { destination: '/partners/iceland-travel/login', permanent: false },
+      redirect: { destination: `/partners/${partnerId}/login`, permanent: false },
     }
   }
   const recordId = ctx.params?.recordId
   if (typeof recordId !== 'string') return { notFound: true }
-  const order = await getPartnerOrder(partner, recordId)
+  const order = await getPartnerOrder(partnerId, recordId)
   if (!order) return { notFound: true }
   // Compute the live quote at SSR so the Trip Summary card renders the
   // priced breakdown on first paint. Out-of-pricelist orders get a
@@ -43,7 +55,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   // page — fall back to a neutral out-of-pricelist value if Airtable
   // is down.
   const initialQuote: PriceQuote = await computeOrderPrice({
-    customer: 'Iceland Travel',
+    customer: PRICELIST_CUSTOMER[partnerId],
     serviceType: order.serviceType,
     bagsRegular: order.bagsRegular,
     bagsOdd: order.bagsOdd,
@@ -61,7 +73,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   )
   return {
     props: {
-      partnerDisplayName: PARTNERS[partner].displayName,
+      partnerId,
+      partnerDisplayName: PARTNERS[partnerId].displayName,
       order,
       initialQuote,
     },
@@ -399,6 +412,7 @@ const diff = (
 }
 
 export default function PartnerOrderPage({
+  partnerId,
   partnerDisplayName,
   order,
   initialQuote,
@@ -442,7 +456,7 @@ export default function PartnerOrderPage({
           _: String(Date.now()),
         })
         const res = await fetch(
-          `/api/partners/iceland-travel/quote?${params.toString()}`,
+          `/api/partners/${partnerId}/quote?${params.toString()}`,
           { cache: 'no-store' },
         )
         if (myReqId !== quoteReqIdRef.current) return // stale
@@ -481,7 +495,7 @@ export default function PartnerOrderPage({
     setToast(null)
     try {
       const res = await fetch(
-        `/api/partners/iceland-travel/orders/${order.id}`,
+        `/api/partners/${partnerId}/orders/${order.id}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -519,9 +533,9 @@ export default function PartnerOrderPage({
   const totalBags = (Number(form.bagsRegular) || 0) + (Number(form.bagsOdd) || 0)
 
   return (
-    <PartnerLayout partnerDisplayName={partnerDisplayName}>
+    <PartnerLayout partnerId={partnerId} partnerDisplayName={partnerDisplayName}>
       <Crumb>
-        <Link href="/partners/iceland-travel/dashboard">← All orders</Link>
+        <Link href={`/partners/${partnerId}/dashboard`}>← All orders</Link>
       </Crumb>
       <Head>
         <div>
@@ -548,7 +562,7 @@ export default function PartnerOrderPage({
       */}
       {isLiveTrackingStage(original.status) && (
         <div style={{ marginBottom: 20 }}>
-          <OrderTrackingMap orderId={original.id} />
+          <OrderTrackingMap partnerId={partnerId} orderId={original.id} />
         </div>
       )}
 
@@ -787,7 +801,7 @@ export default function PartnerOrderPage({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {!isLiveTrackingStage(original.status) && (
-            <OrderTrackingMap orderId={original.id} compact />
+            <OrderTrackingMap partnerId={partnerId} orderId={original.id} compact />
           )}
           <Card>
             <CardTitle>Driver</CardTitle>

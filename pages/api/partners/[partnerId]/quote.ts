@@ -1,20 +1,27 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { requirePartner } from '../../../../utils/partnerAuth'
-import { computeOrderPrice } from '../../../../utils/partnerPricing'
+import { PartnerId, isPartnerId, requirePartner } from '../../../../utils/partnerAuth'
+import { computeOrderPrice, PricelistCustomer } from '../../../../utils/partnerPricing'
 
-const PARTNER_ID = 'iceland-travel' as const
+// Maps the URL slug to the customer name used in the Airtable Pricelist
+// table. The mapping stays here because the pricelist's Customer column
+// is a human-readable display name ("Iceland Travel"), not the URL slug.
+const PRICELIST_CUSTOMER: Record<PartnerId, PricelistCustomer> = {
+  'iceland-travel': 'Iceland Travel',
+  atlantik: 'Atlantik',
+}
 
 // Live price preview for the new-order form (and the order detail page).
 // The portal calls this as the project manager fills in service/bags/time
-// — gets back either a calculated total + breakdown, or a "we'll send an
-// offer" message that the UI surfaces inline.
-//
-// GET so the browser can cache identical inputs cheaply during a single
-// edit session. We use query-string params rather than a body so the
-// request shape stays cache-friendly.
+// — gets back either a calculated total + breakdown, or a "we'll quote"
+// message that the UI surfaces inline.
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!requirePartner(req, res, PARTNER_ID)) return
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+  if (!requirePartner(req, res, partnerId)) return
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
@@ -27,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     deliveryAddress,
   } = req.query
   const input = {
-    customer: 'Iceland Travel' as const,
+    customer: PRICELIST_CUSTOMER[partnerId],
     serviceType: typeof serviceType === 'string' ? serviceType : null,
     bagsRegular:
       typeof bagsRegular === 'string' ? Math.max(0, Number(bagsRegular) || 0) : 0,

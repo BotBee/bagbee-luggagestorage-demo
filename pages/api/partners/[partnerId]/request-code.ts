@@ -4,12 +4,11 @@ import {
   generateLoginCode,
   hashCode,
   isAllowedEmail,
+  isPartnerId,
   normalizeEmail,
   setPendingCookie,
 } from '../../../../utils/partnerAuth'
 import { sendLoginCode } from '../../../../utils/partnerMailer'
-
-const PARTNER_ID = 'iceland-travel' as const
 
 // Step 1 of the email-code login flow.
 //
@@ -32,14 +31,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
+  // Validate the [partnerId] URL slug — reject unknown partners with 404 so
+  // they can't be used to enumerate the registry or hit the SMTP path.
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+
   const body = (req.body as { email?: string }) || {}
   const emailRaw = typeof body.email === 'string' ? body.email : ''
   const email = normalizeEmail(emailRaw)
   if (!email || !email.includes('@')) {
     return res.status(400).json({ message: 'Email is required.' })
   }
-  if (!isAllowedEmail(PARTNER_ID, email)) {
-    const allowed = PARTNERS[PARTNER_ID].allowedDomains
+  if (!isAllowedEmail(partnerId, email)) {
+    const allowed = PARTNERS[partnerId].allowedDomains
       .map((d) => `@${d}`)
       .join(' or ')
     return res
@@ -49,13 +56,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const code = generateLoginCode()
   const codeHash = hashCode(email, code)
-  setPendingCookie(res, PARTNER_ID, email, codeHash)
+  setPendingCookie(res, partnerId, email, codeHash)
 
   try {
     await sendLoginCode({
       to: email,
       code,
-      partnerDisplayName: PARTNERS[PARTNER_ID].displayName,
+      partnerDisplayName: PARTNERS[partnerId].displayName,
     })
   } catch (err) {
     console.error('[partner request-code] failed to send mail', err)

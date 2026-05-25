@@ -4,22 +4,26 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useRef, useState } from 'react'
 import PartnerLayout from '../../../../components/partners/PartnerLayout'
-import { PARTNERS, verifySession } from '../../../../utils/partnerAuth'
+import { PARTNERS, PartnerId, isPartnerId, verifySession } from '../../../../utils/partnerAuth'
 import { OrderSummary } from '../../../../utils/partnerOrders'
 
-type Props = { partnerDisplayName: string; sessionEmail: string }
+type Props = { partnerId: PartnerId; partnerDisplayName: string; sessionEmail: string }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const partnerSlug = ctx.params?.partnerId
+  if (!isPartnerId(partnerSlug)) return { notFound: true }
+  const partnerId = partnerSlug
   const session = verifySession(ctx.req)
-  if (!session || session.partnerId !== 'iceland-travel') {
+  if (!session || session.partnerId !== partnerId) {
     return {
-      redirect: { destination: '/partners/iceland-travel/login', permanent: false },
+      redirect: { destination: `/partners/${partnerId}/login`, permanent: false },
     }
   }
   const sessionEmail = session.email.startsWith('legacy@') ? '' : session.email
   return {
     props: {
-      partnerDisplayName: PARTNERS[session.partnerId].displayName,
+      partnerId,
+      partnerDisplayName: PARTNERS[partnerId].displayName,
       sessionEmail,
     },
   }
@@ -297,7 +301,7 @@ const initial: Form = {
   comment: '',
 }
 
-export default function NewPartnerOrder({ partnerDisplayName, sessionEmail }: Props) {
+export default function NewPartnerOrder({ partnerId, partnerDisplayName, sessionEmail }: Props) {
   const router = useRouter()
   // Seed the contact-email field with the verified session email so the
   // form renders pre-filled on first paint — no localStorage flash.
@@ -347,7 +351,7 @@ export default function NewPartnerOrder({ partnerDisplayName, sessionEmail }: Pr
           _: String(Date.now()),
         })
         const res = await fetch(
-          `/api/partners/iceland-travel/quote?${params.toString()}`,
+          `/api/partners/${partnerId}/quote?${params.toString()}`,
           { cache: 'no-store' },
         )
         if (myReqId !== quoteReqIdRef.current) return // stale; newer one in flight
@@ -429,7 +433,7 @@ export default function NewPartnerOrder({ partnerDisplayName, sessionEmail }: Pr
         comment: form.comment.trim() || undefined,
         language: 'is' as const,
       }
-      const res = await fetch('/api/partners/iceland-travel/orders', {
+      const res = await fetch(`/api/partners/${partnerId}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -444,7 +448,7 @@ export default function NewPartnerOrder({ partnerDisplayName, sessionEmail }: Pr
         msg: `Order #${body.order.orderNoShort} created — BagBee notified.`,
       })
       setTimeout(() => {
-        router.push(`/partners/iceland-travel/orders/${body.order.id}`)
+        router.push(`/partners/${partnerId}/orders/${body.order.id}`)
       }, 800)
     } catch (err) {
       setToast({
@@ -456,9 +460,9 @@ export default function NewPartnerOrder({ partnerDisplayName, sessionEmail }: Pr
   }
 
   return (
-    <PartnerLayout partnerDisplayName={partnerDisplayName}>
+    <PartnerLayout partnerId={partnerId} partnerDisplayName={partnerDisplayName}>
       <Crumb>
-        <Link href="/partners/iceland-travel/dashboard">← Back to dashboard</Link>
+        <Link href={`/partners/${partnerId}/dashboard`}>← Back to dashboard</Link>
       </Crumb>
       <Title>New booking</Title>
       <Sub>

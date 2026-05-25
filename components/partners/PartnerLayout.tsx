@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { ReactNode } from 'react'
 import Logo from '../../public/icons/Logo'
+import { PartnerId } from '../../utils/partnerAuth'
 
 const Wrapper = styled.div`
   min-height: 100vh;
@@ -147,8 +148,10 @@ const Footer = styled.footer`
 `
 
 export const PartnerLayout = ({
+  partnerId,
   children,
 }: {
+  partnerId: PartnerId
   // Accepted but currently unused — the topbar shows the BagBee logo
   // + "Partner portal" caption instead of the agency name. Kept on the
   // signature so callers (dashboard, login, order pages) don't break.
@@ -156,14 +159,19 @@ export const PartnerLayout = ({
   children: ReactNode
 }) => {
   const router = useRouter()
-  const path = router.pathname
+  // useRouter().pathname returns the route template with the dynamic slug
+  // literal, e.g. `/partners/[partnerId]/dashboard`. We compare against the
+  // real URL by substituting the actual partnerId in.
+  const dashboardHref = `/partners/${partnerId}/dashboard`
+  const newOrderHref = `/partners/${partnerId}/orders/new`
+  const actualPath = router.asPath.split('?')[0]
+  const isActive = (href: string) =>
+    actualPath === href || actualPath.startsWith(href + '/')
 
   const logout = async () => {
-    await fetch('/api/partners/iceland-travel/logout', { method: 'POST' })
-    router.replace('/partners/iceland-travel/login')
+    await fetch(`/api/partners/${partnerId}/logout`, { method: 'POST' })
+    router.replace(`/partners/${partnerId}/login`)
   }
-
-  const isActive = (href: string) => path === href || path.startsWith(href + '/')
 
   return (
     <Wrapper>
@@ -176,16 +184,10 @@ export const PartnerLayout = ({
             <BrandSubtitle>Partner portal</BrandSubtitle>
           </Brand>
           <Nav>
-            <NavLink
-              href="/partners/iceland-travel/dashboard"
-              isActive={isActive('/partners/iceland-travel/dashboard')}
-            >
+            <NavLink href={dashboardHref} isActive={isActive(dashboardHref)}>
               Dashboard
             </NavLink>
-            <NavLink
-              href="/partners/iceland-travel/orders/new"
-              isActive={isActive('/partners/iceland-travel/orders/new')}
-            >
+            <NavLink href={newOrderHref} isActive={isActive(newOrderHref)}>
               + New order
             </NavLink>
             <LogoutButton onClick={logout}>Log out</LogoutButton>

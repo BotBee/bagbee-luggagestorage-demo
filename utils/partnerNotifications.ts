@@ -17,6 +17,7 @@
 // the login codes). Fail-soft: a mail outage must never block the
 // underlying order create / update — errors are logged and swallowed.
 
+import { PartnerId } from './partnerAuth'
 import { OrderSummary } from './partnerOrders'
 import { computeOrderPrice, formatIsk } from './partnerPricing'
 import nodemailer, { Transporter } from 'nodemailer'
@@ -76,8 +77,8 @@ const getTransport = (): Transporter => {
 const airtableUrl = (recordId: string): string =>
   `https://airtable.com/${AIRTABLE_BASE}/${AIRTABLE_TABLE}/${recordId}`
 
-const partnerOrderUrl = (recordId: string): string =>
-  `https://bagbee.is/partners/iceland-travel/orders/${recordId}`
+const partnerOrderUrl = (partnerId: PartnerId, recordId: string): string =>
+  `https://bagbee.is/partners/${partnerId}/orders/${recordId}`
 
 const escapeHtml = (s: string): string =>
   s
@@ -155,14 +156,26 @@ const renderOrderTextSummary = (o: OrderSummary): string => {
 // 1. New-order approval notice
 // ---------------------------------------------------------------------------
 
-// Build a price-summary block that goes into Runar's approval email. We
+// Map partner ID → the Customer name used in the Airtable Pricelist
+// table. Atlantik doesn't have pricelist rows yet, so the calculator
+// will return "We will quote" for it; that's fine — the price block
+// just renders the yellow card explaining as much.
+const PRICELIST_CUSTOMER: Record<PartnerId, 'Iceland Travel' | 'Atlantik'> = {
+  'iceland-travel': 'Iceland Travel',
+  atlantik: 'Atlantik',
+}
+
+// Build a price-summary block that goes into the approval email. We
 // re-run the calculator here (rather than trusting the order's stored
 // `amount`) so the email always reflects the current pricelist, even if
 // the partner submitted with a stale or manually-overridden number.
-const renderPriceBlockHtml = async (order: OrderSummary): Promise<string> => {
+const renderPriceBlockHtml = async (
+  partnerId: PartnerId,
+  order: OrderSummary,
+): Promise<string> => {
   try {
     const quote = await computeOrderPrice({
-      customer: 'Iceland Travel',
+      customer: PRICELIST_CUSTOMER[partnerId],
       serviceType: order.serviceType,
       bagsRegular: order.bagsRegular,
       bagsOdd: order.bagsOdd,
@@ -195,7 +208,7 @@ const renderPriceBlockHtml = async (order: OrderSummary): Promise<string> => {
 }
 
 export async function sendNewOrderApprovalNotice(
-  partner: 'iceland-travel',
+  partner: PartnerId,
   partnerDisplayName: string,
   order: OrderSummary,
 ): Promise<void> {
@@ -203,9 +216,9 @@ export async function sendNewOrderApprovalNotice(
   const links = `<p style="font-size:13px;">
     <a href="${airtableUrl(order.id)}" style="color:#3d7165;">Open in Airtable</a>
     &nbsp;·&nbsp;
-    <a href="${partnerOrderUrl(order.id)}" style="color:#3d7165;">Open in partner portal</a>
+    <a href="${partnerOrderUrl(partner, order.id)}" style="color:#3d7165;">Open in partner portal</a>
   </p>`
-  const priceBlock = await renderPriceBlockHtml(order)
+  const priceBlock = await renderPriceBlockHtml(partner, order)
   const html = `
 <!doctype html>
 <html><body style="font-family:Arial,Helvetica,sans-serif;color:#000929;max-width:560px;margin:0 auto;padding:24px;">
@@ -227,7 +240,7 @@ export async function sendNewOrderApprovalNotice(
     renderOrderTextSummary(order) +
     `\n\n` +
     `Airtable: ${airtableUrl(order.id)}\n` +
-    `Portal:   ${partnerOrderUrl(order.id)}\n`
+    `Portal:   ${partnerOrderUrl(partner, order.id)}\n`
 
   await sendMail(subject, text, html, order.id)
 }
@@ -312,14 +325,14 @@ const renderDiffTextSummary = (diffs: UpdateDiff[]): string =>
     .join('\n')
 
 export async function sendOrderUpdateNotice(args: {
-  partner: 'iceland-travel'
+  partner: PartnerId
   partnerDisplayName: string
   actorEmail: string
   actorName: string | null
   order: OrderSummary
   diffs: UpdateDiff[]
 }): Promise<void> {
-  const { partnerDisplayName, actorEmail, actorName, order, diffs } = args
+  const { partner, partnerDisplayName, actorEmail, actorName, order, diffs } = args
   if (diffs.length === 0) return // nothing to email about
 
   const who =
@@ -330,7 +343,7 @@ export async function sendOrderUpdateNotice(args: {
   const links = `<p style="font-size:13px;">
     <a href="${airtableUrl(order.id)}" style="color:#3d7165;">Open in Airtable</a>
     &nbsp;·&nbsp;
-    <a href="${partnerOrderUrl(order.id)}" style="color:#3d7165;">Open in partner portal</a>
+    <a href="${partnerOrderUrl(partner, order.id)}" style="color:#3d7165;">Open in partner portal</a>
   </p>`
   const html = `
 <!doctype html>
@@ -348,7 +361,7 @@ export async function sendOrderUpdateNotice(args: {
     renderDiffTextSummary(diffs) +
     `\n\n` +
     `Airtable: ${airtableUrl(order.id)}\n` +
-    `Portal:   ${partnerOrderUrl(order.id)}\n`
+    `Portal:   ${partnerOrderUrl(partner, order.id)}\n`
 
   await sendMail(subject, text, html, order.id)
 }

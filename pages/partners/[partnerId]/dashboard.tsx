@@ -2,7 +2,7 @@ import styled from '@emotion/styled'
 import { GetServerSideProps } from 'next'
 import { useEffect, useMemo, useState } from 'react'
 import PartnerLayout from '../../../components/partners/PartnerLayout'
-import { PARTNERS, verifySession } from '../../../utils/partnerAuth'
+import { PARTNERS, PartnerId, isPartnerId, verifySession } from '../../../utils/partnerAuth'
 import {
   computeKpis,
   Kpis,
@@ -11,6 +11,7 @@ import {
 } from '../../../utils/partnerOrders'
 
 type Props = {
+  partnerId: PartnerId
   partnerDisplayName: string
   // Email of the signed-in staffer (from the verified session cookie). The
   // "My orders" filter and new-order-form autofill both default to this;
@@ -35,26 +36,29 @@ const sortDispatcherOrder = (a: OrderSummary, b: OrderSummary) => {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const partnerSlug = ctx.params?.partnerId
+  if (!isPartnerId(partnerSlug)) return { notFound: true }
+  const partnerId = partnerSlug
   const session = verifySession(ctx.req)
-  if (!session || session.partnerId !== 'iceland-travel') {
+  if (!session || session.partnerId !== partnerId) {
     return {
-      redirect: { destination: '/partners/iceland-travel/login', permanent: false },
+      redirect: { destination: `/partners/${partnerId}/login`, permanent: false },
     }
   }
-  const partner = session.partnerId
-  // Legacy shared-password sessions are tagged `legacy@iceland-travel.local`
+  // Legacy shared-password sessions are tagged `legacy@<partner>.local`
   // (see setPartnerCookie). Surface empty string for those so the UI doesn't
   // pre-populate the "My orders" email box with a synthetic address.
   const sessionEmail = session.email.startsWith('legacy@')
     ? ''
     : session.email
   try {
-    const orders = await listPartnerOrders('iceland-travel')
+    const orders = await listPartnerOrders(partnerId)
     orders.sort(sortDispatcherOrder)
     const kpis = computeKpis(orders)
     return {
       props: {
-        partnerDisplayName: PARTNERS[partner].displayName,
+        partnerId,
+        partnerDisplayName: PARTNERS[partnerId].displayName,
         sessionEmail,
         initialOrders: orders,
         initialKpis: kpis,
@@ -64,7 +68,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     console.error('[dashboard SSR] failed', err)
     return {
       props: {
-        partnerDisplayName: PARTNERS[partner].displayName,
+        partnerId,
+        partnerDisplayName: PARTNERS[partnerId].displayName,
         sessionEmail,
         initialOrders: [],
         initialKpis: computeKpis([]),
@@ -490,6 +495,7 @@ const matchesFilter = (filter: StatusFilter, o: OrderSummary): boolean => {
 const STAFF_EMAIL_KEY = 'bb_partner_staff_email'
 
 export default function PartnerDashboard({
+  partnerId,
   partnerDisplayName,
   sessionEmail,
   initialOrders,
@@ -536,7 +542,7 @@ export default function PartnerDashboard({
   useEffect(() => {
     const id = setInterval(async () => {
       try {
-        const res = await fetch('/api/partners/iceland-travel/orders')
+        const res = await fetch(`/api/partners/${partnerId}/orders`)
         if (!res.ok) return
         const data = (await res.json()) as { orders: OrderSummary[]; kpis: Kpis }
         setOrders(data.orders.slice().sort(sortDispatcherOrder))
@@ -581,7 +587,7 @@ export default function PartnerDashboard({
   }, [orders, filter, query, mineOnly, staffEmail])
 
   return (
-    <PartnerLayout partnerDisplayName={partnerDisplayName}>
+    <PartnerLayout partnerId={partnerId} partnerDisplayName={partnerDisplayName}>
       <KpiGrid>
         <KpiCard>
           <KpiLabel>Next 7 days</KpiLabel>
@@ -688,7 +694,7 @@ export default function PartnerDashboard({
                   <Row
                     key={o.id}
                     onClick={() => {
-                      window.location.href = `/partners/iceland-travel/orders/${o.id}`
+                      window.location.href = `/partners/${partnerId}/orders/${o.id}`
                     }}
                   >
                     <Td data-label="Ref #">

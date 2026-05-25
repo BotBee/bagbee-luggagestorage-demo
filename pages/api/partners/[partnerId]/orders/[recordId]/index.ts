@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import {
   PARTNERS,
+  isPartnerId,
   requirePartner,
   verifySession,
 } from '../../../../../../utils/partnerAuth'
@@ -14,8 +15,6 @@ import {
   UpdateDiff,
 } from '../../../../../../utils/partnerNotifications'
 import { normalizePhone } from '../../../../../../utils/phoneNormalize'
-
-const PARTNER_ID = 'iceland-travel' as const
 
 const EDITABLE_KEYS: EditableField[] = [
   'reference',
@@ -95,7 +94,12 @@ const sanitizeChanges = (
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!requirePartner(req, res, PARTNER_ID)) return
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+  if (!requirePartner(req, res, partnerId)) return
 
   const recordId = req.query.recordId
   if (typeof recordId !== 'string' || !/^rec[A-Za-z0-9]{14}$/.test(recordId)) {
@@ -104,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
-      const order = await getPartnerOrder(PARTNER_ID, recordId)
+      const order = await getPartnerOrder(partnerId, recordId)
       if (!order) return res.status(404).json({ message: 'Order not found' })
       return res.status(200).json({ order })
     } catch (err) {
@@ -124,10 +128,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Pull the pre-change row so the email diff can show before/after.
       // If this fails, we still let the update proceed — we just send
       // a less informative email (or skip it entirely).
-      const before = await getPartnerOrder(PARTNER_ID, recordId).catch(
+      const before = await getPartnerOrder(partnerId, recordId).catch(
         () => null,
       )
-      const updated = await updatePartnerOrder(PARTNER_ID, recordId, changes, actor)
+      const updated = await updatePartnerOrder(partnerId, recordId, changes, actor)
       if (!updated) return res.status(404).json({ message: 'Order not found' })
 
       // Build the diff list from the keys the partner actually submitted.
@@ -158,8 +162,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // errors so a mail outage still doesn't fail the update.
       const session = verifySession(req)
       await sendOrderUpdateNotice({
-        partner: PARTNER_ID,
-        partnerDisplayName: PARTNERS[PARTNER_ID].displayName,
+        partner: partnerId,
+        partnerDisplayName: PARTNERS[partnerId].displayName,
         actorEmail: session?.email || 'unknown@partner',
         actorName: actor || null,
         order: updated,

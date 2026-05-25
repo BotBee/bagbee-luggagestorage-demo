@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PARTNERS, requirePartner } from '../../../../../utils/partnerAuth'
+import { PARTNERS, isPartnerId, requirePartner } from '../../../../../utils/partnerAuth'
 import {
   computeKpis,
   createPartnerOrder,
@@ -9,7 +9,6 @@ import {
 import { sendNewOrderApprovalNotice } from '../../../../../utils/partnerNotifications'
 import { normalizePhone } from '../../../../../utils/phoneNormalize'
 
-const PARTNER_ID = 'iceland-travel' as const
 // nudge HMR
 
 
@@ -111,11 +110,16 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!requirePartner(req, res, PARTNER_ID)) return
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+  if (!requirePartner(req, res, partnerId)) return
 
   if (req.method === 'GET') {
     try {
-      const orders = await listPartnerOrders(PARTNER_ID)
+      const orders = await listPartnerOrders(partnerId)
       const kpis = computeKpis(orders)
       // Sort newest flight first for the list view.
       orders.sort((a, b) => {
@@ -136,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: validation.reason })
     }
     try {
-      const created = await createPartnerOrder(PARTNER_ID, validation.input)
+      const created = await createPartnerOrder(partnerId, validation.input)
       // IMPORTANT: await the notifier. On Vercel serverless the function is
       // torn down the moment we return — fire-and-forget promises get
       // killed mid-TLS-handshake and the email never actually sends. We
@@ -144,8 +148,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // reliably arrives. The notifier swallows its own errors, so a mail
       // outage still doesn't fail the order create.
       await sendNewOrderApprovalNotice(
-        PARTNER_ID,
-        PARTNERS[PARTNER_ID].displayName,
+        partnerId,
+        PARTNERS[partnerId].displayName,
         created,
       )
       return res.status(201).json({ order: created })

@@ -35,7 +35,7 @@ const F = {
   notes: 'fldAh5Dz7jJvh9WBq',
 } as const
 
-export type PricelistCustomer = 'Iceland Travel' | 'Standard'
+export type PricelistCustomer = 'Iceland Travel' | 'Atlantik' | 'Standard'
 export type PricelistCategory =
   | 'BSI to Hotel'
   | 'Capital area transfer'
@@ -363,14 +363,9 @@ const BAGS_PER_PAX = 1.5
 export const computeOrderPrice = async (
   input: PriceInput,
 ): Promise<PriceQuote> => {
-  if (input.customer !== 'Iceland Travel') {
-    // Today the calculator only auto-prices IT. Anything else falls
-    // through to manual quote.
-    return {
-      kind: 'out-of-pricelist',
-      reason: 'Customer not in pricelist',
-    }
-  }
+  // No customer-specific gate here — we let the table drive it. If there
+  // are no rows for the customer the row-filter step below comes up empty
+  // and we return out-of-pricelist with a clear reason.
   const decision = determineCategory(
     input.pickupAddress,
     input.deliveryAddress,
@@ -410,13 +405,24 @@ export const computeOrderPrice = async (
   // one-van and Runar quotes them manually based on actual vehicle plan.
   // **Do not extend either tier to fill the gap** — talk to ops first.
   const rows = await fetchPricelist()
-  const itRowsForCategory = rows.filter(
-    (r) => r.customer === 'Iceland Travel' && r.category === category,
+  const customerRowsForCategory = rows.filter(
+    (r) => r.customer === input.customer && r.category === category,
   )
-  const paxRow = itRowsForCategory.find(
+
+  // No rows at all for this customer + category → almost always means
+  // we haven't loaded a pricelist for this partner yet (e.g. Atlantik
+  // before they send their rates). Bounce to manual quote cleanly.
+  if (customerRowsForCategory.length === 0) {
+    return {
+      kind: 'out-of-pricelist',
+      reason: `No ${category} rates set for ${input.customer} yet — we'll quote.`,
+    }
+  }
+
+  const paxRow = customerRowsForCategory.find(
     (r) => r.unit === 'pax' && pax >= r.minUnits && pax <= r.maxUnits,
   )
-  const bagsRow = itRowsForCategory.find(
+  const bagsRow = customerRowsForCategory.find(
     (r) => r.unit === 'bags' && totalBags >= r.minUnits && totalBags <= r.maxUnits,
   )
   const row = paxRow || bagsRow
@@ -424,15 +430,15 @@ export const computeOrderPrice = async (
   if (!row) {
     // Friendly-message logic: figure out WHY there's no match so the PM
     // sees something more useful than "no row matches".
-    const hasPaxTier = itRowsForCategory.some((r) => r.unit === 'pax')
-    const hasBagsTier = itRowsForCategory.some((r) => r.unit === 'bags')
+    const hasPaxTier = customerRowsForCategory.some((r) => r.unit === 'pax')
+    const hasBagsTier = customerRowsForCategory.some((r) => r.unit === 'bags')
     const maxPax = Math.max(
       0,
-      ...itRowsForCategory.filter((r) => r.unit === 'pax').map((r) => r.maxUnits),
+      ...customerRowsForCategory.filter((r) => r.unit === 'pax').map((r) => r.maxUnits),
     )
     const minBagsTier = Math.min(
       Infinity,
-      ...itRowsForCategory
+      ...customerRowsForCategory
         .filter((r) => r.unit === 'bags')
         .map((r) => r.minUnits),
     )

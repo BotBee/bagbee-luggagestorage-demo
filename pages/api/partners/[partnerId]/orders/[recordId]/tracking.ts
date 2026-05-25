@@ -1,9 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { requirePartner } from '../../../../../../utils/partnerAuth'
+import { isPartnerId, requirePartner } from '../../../../../../utils/partnerAuth'
 import { getPartnerOrder } from '../../../../../../utils/partnerOrders'
 import { computeOrderTracking, OrderTracking } from '../../../../../../utils/driverTracking'
-
-const PARTNER_ID = 'iceland-travel' as const
 
 export type TrackingResponse = {
   orderId: string
@@ -17,7 +15,12 @@ export type TrackingResponse = {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!requirePartner(req, res, PARTNER_ID)) return
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+  if (!requirePartner(req, res, partnerId)) return
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
@@ -26,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: 'Invalid record ID' })
   }
   try {
-    const order = await getPartnerOrder(PARTNER_ID, recordId)
+    const order = await getPartnerOrder(partnerId, recordId)
     if (!order) return res.status(404).json({ message: 'Order not found' })
     // For airport flights, the "delivery" coord is KEF; for local transfers
     // it's whatever the dispatcher wrote into the Delivery Address field.

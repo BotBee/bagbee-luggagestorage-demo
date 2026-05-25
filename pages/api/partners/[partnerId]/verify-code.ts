@@ -5,6 +5,7 @@ import {
   bumpPendingAttempts,
   clearPendingCookie,
   hashCode,
+  isPartnerId,
   readPendingCookie,
   setSessionCookie,
 } from '../../../../utils/partnerAuth'
@@ -30,6 +31,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
+  // Validate the URL slug. The pending cookie carries its own partnerId
+  // (set by request-code) — require both match so a user who started a
+  // login flow for partner A can't accidentally complete it on partner B's
+  // page.
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
   const body = (req.body as { code?: string }) || {}
   const codeRaw = typeof body.code === 'string' ? body.code.trim() : ''
   if (!/^\d{6}$/.test(codeRaw)) {
@@ -41,6 +50,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res
       .status(400)
       .json({ message: 'Your code expired. Request a new one.' })
+  }
+  if (pending.partnerId !== partnerSlug) {
+    clearPendingCookie(res)
+    return res
+      .status(400)
+      .json({ message: 'Login flow got out of sync. Request a new code.' })
   }
   if (pending.attempts >= MAX_CODE_ATTEMPTS) {
     clearPendingCookie(res)
