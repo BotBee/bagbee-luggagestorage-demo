@@ -55,11 +55,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (request.type === 'PAYMENT_COMPLETED') {
       console.log('[api][payment][webhooks] metadata:', request.data.metadata)
       console.log('[api][payment][webhooks] payment id:', request.data.id)
+      const billingCountry = extractBillingCountry(request.data)
+      console.log('[api][payment][webhooks] billing country:', billingCountry ?? '(not found)')
       try {
         await UpdatePaidStatus(
           request.data.metadata.recordId,
           request.data.metadata.tableType,
           request.data.id,
+          billingCountry,
         )
       } catch (error) {
         console.error('[api][payment][webhooks] Error updating paid status', error)
@@ -81,6 +84,7 @@ const UpdatePaidStatus = async (
   recordId: string,
   tableType: 'baggage' | 'fast-track',
   paymentId?: string,
+  billingCountry?: string,
 ) => {
   if (!recordId) {
     console.log('[api][payment][webhooks] record is missing')
@@ -99,6 +103,10 @@ const UpdatePaidStatus = async (
       Greiðslustaða: 'Greitt',
       Greitt: true,
       ...(paymentId ? { 'Rapyd Payment ID': paymentId } : {}),
+      // Capture issuing country (or billing country) for passenger-origin
+      // reporting in airline dashboards. Only written when Rapyd provides it
+      // — leaves the field blank rather than overwriting with garbage.
+      ...(billingCountry ? { 'Billing country': billingCountry } : {}),
     })
     // Send Payday invoice if this order has a Kennitala (B2B). Idempotent
     // via the "Payday Invoice Sent" flag — safe against the optimistic
@@ -111,4 +119,45 @@ const UpdatePaidStatus = async (
     })
   }
   console.log('[api][payment][webhooks] updating paid status for record', recordId, 'paymentId', paymentId)
+}
+
+/**
+ * Extract a 2- or 3-letter ISO country code from the Rapyd PAYMENT_COMPLETED
+ * payload. Tries several known locations because Rapyd's payload shape varies
+ * by payment method (card vs Apple Pay vs bank). Returns undefined if none
+ * found — callers should treat that as "leave the Airtable field blank".
+ *
+ * Priority:
+ *   1. payment_method_data.bin_details.country — card-issuing country (most
+ *      reliable for cards; harder to spoof than a billing-address form field)
+ *   2. payment_method_data.billing_address.country — when present
+ *   3. payment_method_data.country — some wallet payments expose it here
+ *   4. data.address.country / data.billing_address.country — top-level
+ *      fallbacks seen in some Rapyd responses
+ */
+const extractBillingCountry = (data: unknown): string | undefined => {
+  const get = (obj: unknown, path: string[]): unknown =>
+    path.reduce<unknown>((acc, key) => {
+      if (acc && typeof acc === 'object' && key in (acc as Record<string, unknown>)) {
+        return (acc as Record<string, unknown>)[key]
+      }
+      return undefined
+    }, obj)
+
+  const candidates = [
+    get(data, ['payment_method_data', 'bin_details', 'country']),
+    get(data, ['payment_method_data', 'billing_address', 'country']),
+    get(data, ['payment_method_data', 'country']),
+    get(data, ['billing_address', 'country']),
+    get(data, ['address', 'country']),
+  ]
+
+  for (const c of candidates) {
+    if (typeof c === 'string') {
+      const trimmed = c.trim().toUpperCase()
+      // ISO 3166-1 alpha-2 is 2 chars; alpha-3 is 3. Anything else is junk.
+      if (trimmed.length === 2 || trimmed.length === 3) return trimmed
+    }
+  }
+  return undefined
 }
