@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
 import { maybeSendPaydayInvoiceForOrder } from '../../../utils/paydayInvoice'
+import { requireInternalSecret } from '../../../utils/internalApiAuth'
 
 /**
  * Optimistic "mark paid" called by /orders/[orderNo] when the customer
@@ -15,6 +16,11 @@ import { maybeSendPaydayInvoiceForOrder } from '../../../utils/paydayInvoice'
  * Airtable returns 422 and aborts the whole patch (caused the prod
  * webhook outage on Apr 22 2026).
  *
+ * SERVER-ONLY: gated by requireInternalSecret(). The legitimate caller is
+ * the getServerSideProps in pages/orders/[orderNo].tsx — see
+ * utils/internalApiAuth.ts. Anyone hitting this directly without the
+ * x-internal-secret header gets a 403.
+ *
  * POST /api/airtable/mark-paid-by-order-no
  * Body: { orderNo: 'XXXXX' }  (the 5-char Pöntunarnúmer (fx) value)
  */
@@ -23,6 +29,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['POST'])
     return res.status(405).json({ message: 'Method not allowed' })
   }
+
+  if (!requireInternalSecret(req, res)) return
 
   const orderNo = (req.body?.orderNo as string) || (req.query.orderNo as string)
   if (!orderNo || !/^[a-zA-Z0-9]+$/.test(orderNo)) {

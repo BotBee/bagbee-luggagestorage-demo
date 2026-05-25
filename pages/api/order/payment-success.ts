@@ -1,10 +1,17 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
+import { verifySurchargeParams } from '../../../utils/orderSurchargeSig'
 
 /**
  * Called by Rapyd after successful surcharge payment.
  * Updates the Airtable record with new bag counts, amount, timing, and triggers Update OC.
  * Then redirects the user back to the order page.
+ *
+ * Signature requirement: the surcharge URL is built by /api/order/update,
+ * which HMAC-signs every param it puts in here. Without a matching `sig`
+ * and unexpired `exp`, we refuse — otherwise anyone could hit this URL
+ * directly with crafted bags / amount / address values to rewrite an
+ * order they don't own. See utils/orderSurchargeSig.ts.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -21,10 +28,39 @@ export default async function handler(
     deliveryAddress,
     deliveryDate,
     deliveryTimeWindow,
+    exp,
+    sig,
   } = req.query as Record<string, string>
 
   if (!orderNo || !/^[a-zA-Z0-9]+$/.test(orderNo)) {
     return res.redirect(`/orders/?error=true`)
+  }
+
+  // Verify the HMAC before touching Airtable. Reasons logged for ops
+  // visibility; user-facing redirect is the same generic ?error=true so
+  // we don't tell attackers which check failed.
+  const verdict = verifySurchargeParams(
+    {
+      orderNo,
+      bags,
+      oddSize,
+      amount,
+      timeWindow,
+      address,
+      pickupDate,
+      deliveryAddress,
+      deliveryDate,
+      deliveryTimeWindow,
+    },
+    exp,
+    sig
+  )
+  if (!verdict.ok) {
+    console.warn(
+      '[payment-success] rejected surcharge callback',
+      { orderNo, reason: verdict.reason }
+    )
+    return res.redirect(`/orders/${orderNo}?error=true`)
   }
 
   try {

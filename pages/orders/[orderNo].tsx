@@ -16,6 +16,7 @@ import is from '../../common/locales/is'
 import { useBookingStore } from '../../store/store'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
 import CharterPassengerCard from '../../components/charter-passenger-card/CharterPassengerCard'
+import { internalSecretHeaders } from '../../utils/internalApiAuth'
 
 // Format a phone number for display.
 // Defaults to Iceland (+354) when the number has no country code (most BagBee
@@ -2984,7 +2985,7 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
       try {
         await fetch(`${baseUrl}/api/airtable/mark-paid-by-order-no`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...internalSecretHeaders() },
           body: JSON.stringify({ orderNo }),
         })
       } catch (err) {
@@ -2993,7 +2994,8 @@ export const getServerSideProps: GetServerSideProps<OrderPageProps> = async ({
     }
 
     const orderRes = await fetch(
-      `${baseUrl}/api/airtable/read-by-order-no?orderNo=${orderNo}`
+      `${baseUrl}/api/airtable/read-by-order-no?orderNo=${orderNo}`,
+      { headers: internalSecretHeaders() }
     )
     if (!orderRes.ok) {
       return { props: { order: null, photos: [], orderNo, scheduledAt: null, fastTrackSummary: null } }

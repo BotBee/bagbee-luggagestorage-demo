@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { getOrdersLookupTable } from '../../../utils/airtable'
+import { signSurchargeParams } from '../../../utils/orderSurchargeSig'
 
 const EXTRA_BAG_PRICE = 1990
 const EXTRA_ODDSIZE_PRICE = 2490
@@ -51,8 +52,12 @@ export default async function handler(
       const protocol = host.includes('localhost') ? 'http' : 'https'
       const baseUrl = `${protocol}://${host}`
 
-      // Encode the update params into the success callback URL
-      const successParams = new URLSearchParams({
+      // Encode the update params into the success callback URL. We then
+      // sign them (HMAC over the full canonical param set + an expiry) so
+      // payment-success.ts can verify the redirect actually came from
+      // here — without the signature, anyone hitting payment-success with
+      // a guessed orderNo could rewrite the order. See utils/orderSurchargeSig.ts.
+      const signedFields = {
         orderNo,
         bags: String(newBags),
         oddSize: String(newOddSize),
@@ -67,7 +72,9 @@ export default async function handler(
         ...(changes.deliveryTimeWindow
           ? { deliveryTimeWindow: changes.deliveryTimeWindow }
           : {}),
-      })
+      }
+      const { exp, sig } = signSurchargeParams(signedFields)
+      const successParams = new URLSearchParams({ ...signedFields, exp, sig })
 
       const rapydPayload = {
         amount: surcharge,
