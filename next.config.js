@@ -21,6 +21,7 @@ const serverRuntimeConfig = {
   paydayBaseUrl: process.env.PAYDAY_BASE_URL,
   paydayClientId: process.env.PAYDAY_CLIENT_ID,
   paydayClientSecret: process.env.PAYDAY_CLIENT_SECRET,
+  storageRefundSecret: process.env.STORAGE_REFUND_SECRET,
 }
 
 /** @type {import('next').NextConfig} */

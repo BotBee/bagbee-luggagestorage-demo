@@ -53,13 +53,19 @@ const rapydRefund = (
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { bookingId } = req.body as { bookingId: string }
-  if (!bookingId) return res.status(400).json({ message: 'bookingId required' })
-
   const {
     publicRuntimeConfig: { rapydBaseUrl, rapydAccessKey },
-    serverRuntimeConfig: { airtableAccessToken, airtableBaseId, airtableEndpointUrl },
+    serverRuntimeConfig: { airtableAccessToken, airtableBaseId, airtableEndpointUrl, storageRefundSecret },
   } = getAppConfig()
+
+  // Require secret header — prevents anyone with a bookingId from triggering refunds
+  const providedSecret = req.headers['x-refund-secret']
+  if (!storageRefundSecret || providedSecret !== storageRefundSecret) {
+    return res.status(403).json({ message: 'Forbidden' })
+  }
+
+  const { bookingId } = req.body as { bookingId: string }
+  if (!bookingId) return res.status(400).json({ message: 'bookingId required' })
 
   try {
     Airtable.configure({ apiKey: airtableAccessToken, endpointUrl: airtableEndpointUrl })
