@@ -68,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[partner request-code] failed to send mail', err)
     return res.status(500).json({
       message:
-        'Could not send the code right now. Please try again, or contact runar@bagbee.is.',
+        'Could not send the code right now. Please try again, or contact bagbee@bagbee.is.',
     })
   }
 

@@ -199,6 +199,15 @@ export default function PartnerLogin({ partnerId, partnerDisplayName }: Props) {
   const [info, setInfo] = useState<string | null>(null)
   const codeRef = useRef<HTMLInputElement>(null)
 
+  // Pick the placeholder domain from the partner's allowlist — the first
+  // entry that isn't bagbee.is (which is our internal debug-access domain,
+  // not the partner staffer's actual work email). Falls back to the first
+  // allowed domain if all of them are bagbee.is (shouldn't happen).
+  const primaryDomain =
+    PARTNERS[partnerId].allowedDomains.find((d) => d !== 'bagbee.is') ||
+    PARTNERS[partnerId].allowedDomains[0]
+  const emailPlaceholder = `you@${primaryDomain}`
+
   // Auto-focus the code input when we land on step 2.
   useEffect(() => {
     if (step === 'code') {
@@ -306,7 +315,7 @@ export default function PartnerLogin({ partnerId, partnerDisplayName }: Props) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@icelandtravel.is"
+              placeholder={emailPlaceholder}
               autoFocus
               autoComplete="email"
               required
@@ -349,7 +358,7 @@ export default function PartnerLogin({ partnerId, partnerDisplayName }: Props) {
 
         {info && <Ok>{info}</Ok>}
         {error && <Err>{error}</Err>}
-        <Hint>Forgotten access? Email runar@bagbee.is</Hint>
+        <Hint>Forgotten access? Email bagbee@bagbee.is</Hint>
       </Card>
     </Page>
   )

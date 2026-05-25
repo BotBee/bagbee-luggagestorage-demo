@@ -1,6 +1,6 @@
 // Server-side notifier for partner-portal events.
 //
-// Two events trigger emails to runar@bagbee.is:
+// Two events trigger emails to bagbee@bagbee.is:
 //
 //   1. partner created a new booking → "approve me" email. The order is
 //      saved in Airtable with Greitt unchecked (= Pending). Once Runar
