@@ -3,14 +3,11 @@ import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { NextSeo } from 'next-seo'
 import styled from '@emotion/styled'
-import { css, keyframes } from '@emotion/react'
-import { Global } from '@emotion/react'
+import { keyframes } from '@emotion/react'
 import { useForm, Controller } from 'react-hook-form'
 import PhoneInput from 'react-phone-input-2'
 import 'react-phone-input-2/lib/style.css'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import dayjs from 'dayjs'
+import TransportCalendar from '../components/transport/TransportCalendar'
 import axios from 'axios'
 import { Toaster } from 'react-hot-toast'
 import Logo from '../public/icons/Logo'
@@ -82,9 +79,6 @@ const timeOptions = (startH = 6, startM = 45, endH = 23) => {
 const CHECKIN_TIMES       = timeOptions(6,  45, 17)
 const CHECKOUT_TIMES_OPEN = timeOptions(6,  45, 17)
 const CHECKOUT_TIMES_LATE = timeOptions(17, 15, 23)
-
-const strToDate = (s: string): Date | null => (s ? dayjs(s).toDate() : null)
-const dateToStr = (d: Date | null): string => (d ? dayjs(d).format('YYYY-MM-DD') : '')
 
 /* ── styled components — transport design language ───────── */
 
@@ -240,55 +234,33 @@ const ErrorText = styled.span`
   color: #b91c1c;
 `
 
-/* DatePicker global override — match transport chip look */
-const DatePickerGlobal = () => (
-  <Global styles={css`
-    .bbstore-picker { width: 100%; }
-    .bbstore-picker .react-datepicker__input-container input {
-      height: 44px;
-      width: 100%;
-      border: 1px solid #c8cdd6;
-      border-radius: 8px;
-      font-family: 'Poppins';
-      font-size: 14px;
-      color: #12141d;
-      padding: 0 12px;
-      background: #fff;
-      cursor: pointer;
-      box-sizing: border-box;
-    }
-    .bbstore-picker .react-datepicker__input-container input::placeholder { color: #9ca3af; }
-    .bbstore-picker .react-datepicker__input-container input:focus {
-      outline: none;
-      box-shadow: 0 4px 10px 3px rgba(0,0,0,0.08);
-    }
-    .react-datepicker-popper { z-index: 20; }
-    .react-datepicker {
-      font-family: 'Poppins';
-      border: 1px solid #e6e9ee;
-      border-radius: 10px;
-      box-shadow: 0 8px 24px -8px rgba(0,0,0,0.15);
-      overflow: hidden;
-    }
-    .react-datepicker__header {
-      background: #1d3c34;
-      border-bottom: none;
-      padding: 12px 0 8px;
-    }
-    .react-datepicker__current-month,
-    .react-datepicker__day-name { color: #fff; font-family: 'Poppins'; }
-    .react-datepicker__navigation-icon::before { border-color: #f3ad3c; }
-    .react-datepicker__day--selected,
-    .react-datepicker__day--keyboard-selected {
-      background: #f3ad3c;
-      color: #12141d;
-      border-radius: 6px;
-      font-weight: 700;
-    }
-    .react-datepicker__day:hover { background: #fff5e1; border-radius: 6px; }
-    .react-datepicker__day--disabled { opacity: 0.35; cursor: not-allowed; }
-  `} />
-)
+/* Date chips — mirror transport DateChip pattern */
+const DateChipsRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+`
+
+const DateChip = styled.div`
+  border: 1px solid #e9ecf0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fafafa;
+`
+
+const DateChipLabel = styled.div`
+  font-family: 'Poppins';
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+`
+
+const DateChipValue = styled.div`
+  font-family: 'Poppins';
+  font-size: 15px;
+  font-weight: ${({ $placeholder }) => ($placeholder ? 400 : 600)};
+  color: ${({ $placeholder }) => ($placeholder ? '#9CA3AF' : '#12141d')};
+`
 
 /* Bag stepper — transport BagStepper style */
 const BagStepper = styled.div`
@@ -582,7 +554,6 @@ const LuggageStorage = () => {
         title='Luggage Storage in Reykjavik — BagBee'
         description='Secure, staffed luggage storage at BSÍ bus terminal in Reykjavik City Center. Book in seconds.'
       />
-      <DatePickerGlobal />
       <Toaster position='top-center' />
 
       <PageContainer>
@@ -607,52 +578,39 @@ const LuggageStorage = () => {
               {/* ── Dates & Times ── */}
               <Section>
                 <SectionTitle>When?</SectionTitle>
-                <FieldGrid>
-                  <Field>
-                    Drop-off date <span style={{ color: '#c25400' }}>*</span>
-                    <Controller
-                      name='arrivalDate'
-                      control={control}
-                      rules={{ required: 'Required' }}
-                      render={({ field }) => (
-                        <DatePicker
-                          selected={strToDate(field.value)}
-                          onChange={(d) => field.onChange(dateToStr(d))}
-                          minDate={new Date()}
-                          dateFormat='dd MMM yyyy'
-                          placeholderText='Select date'
-                          wrapperClassName='bbstore-picker'
-                          autoComplete='off'
-                        />
-                      )}
-                    />
-                    {errors.arrivalDate && <ErrorText>{errors.arrivalDate.message}</ErrorText>}
-                  </Field>
 
-                  <Field>
-                    Pick-up date <span style={{ color: '#c25400' }}>*</span>
-                    <Controller
-                      name='departureDate'
-                      control={control}
-                      rules={{
-                        required: 'Required',
-                        validate: (v) =>
-                          !values.arrivalDate || v >= values.arrivalDate || 'Must be after drop-off',
-                      }}
-                      render={({ field }) => (
-                        <DatePicker
-                          selected={strToDate(field.value)}
-                          onChange={(d) => field.onChange(dateToStr(d))}
-                          minDate={strToDate(values.arrivalDate) || new Date()}
-                          dateFormat='dd MMM yyyy'
-                          placeholderText='Select date'
-                          wrapperClassName='bbstore-picker'
-                          autoComplete='off'
-                        />
-                      )}
-                    />
+                {/* Range calendar — same component as /transport */}
+                <TransportCalendar
+                  pickupDate={values.arrivalDate || null}
+                  deliveryDate={values.departureDate || null}
+                  onChange={(arrivalDate, departureDate) => {
+                    setValue('arrivalDate', arrivalDate || '', { shouldValidate: true })
+                    setValue('departureDate', departureDate || '', { shouldValidate: true })
+                  }}
+                  locale='en'
+                />
+                <DateChipsRow style={{ marginBottom: 20 }}>
+                  <DateChip>
+                    <DateChipLabel>Drop-off date</DateChipLabel>
+                    <DateChipValue $placeholder={!values.arrivalDate}>
+                      {values.arrivalDate || 'Select date'}
+                    </DateChipValue>
+                    {errors.arrivalDate && <ErrorText>{errors.arrivalDate.message}</ErrorText>}
+                  </DateChip>
+                  <DateChip>
+                    <DateChipLabel>Pick-up date</DateChipLabel>
+                    <DateChipValue $placeholder={!values.departureDate}>
+                      {values.departureDate || 'Select date'}
+                    </DateChipValue>
                     {errors.departureDate && <ErrorText>{errors.departureDate.message}</ErrorText>}
-                  </Field>
+                  </DateChip>
+                </DateChipsRow>
+
+                {/* Hidden inputs to keep react-hook-form validation */}
+                <input type='hidden' {...register('arrivalDate', { required: 'Drop-off date required' })} />
+                <input type='hidden' {...register('departureDate', { required: 'Pick-up date required' })} />
+
+                <FieldGrid>
 
                   <Field>
                     Check-in time <span style={{ color: '#c25400' }}>*</span>
