@@ -41,18 +41,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ message: 'Internal server error' })
     }
 
-    const signature = sign(
-      '', // no method for webhooks
+    // Rapyd signs against the *exact* URL configured in their dashboard.
+    // `req.headers.host` is unreliable on Vercel — can be a vercel-internal
+    // hostname, an apex (`bagbee.is`) vs `www.bagbee.is`, etc. So we try a
+    // small set of canonical URLs in priority order. First one whose signature
+    // matches wins. RAPYD_WEBHOOK_URL overrides for self-hosted / staging.
+    const candidateUrls = [
+      process.env.RAPYD_WEBHOOK_URL,
+      'https://www.bagbee.is/api/payment/webhooks',
+      'https://bagbee.is/api/payment/webhooks',
       new URL(req.url || '', `https://${req.headers.host}`).toString(),
-      String(req.headers['salt']),
-      Number(req.headers['timestamp']),
-      request,
-    )
+    ].filter(Boolean) as string[]
 
-    console.log('[api][payment][webhooks] signature', signature)
+    const incomingSig = String(req.headers['signature'] || '')
+    const salt = String(req.headers['salt'])
+    const timestamp = Number(req.headers['timestamp'])
 
-    if (req.headers['signature'] !== signature) {
-      console.log('[api][payment][webhooks] Invalid signature')
+    let signatureValid = false
+    for (const url of candidateUrls) {
+      const expected = sign('', url, salt, timestamp, request)
+      if (expected === incomingSig) {
+        signatureValid = true
+        console.log('[api][payment][webhooks] signature ok via', url)
+        break
+      }
+    }
+
+    if (!signatureValid) {
+      console.warn(
+        '[api][payment][webhooks] Invalid signature; host=%s url=%s tried=%j',
+        req.headers.host,
+        req.url,
+        candidateUrls,
+      )
       return res.status(400).json({ message: 'Invalid signature' })
     }
 

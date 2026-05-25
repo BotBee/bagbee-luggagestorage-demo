@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
 import styled from '@emotion/styled'
@@ -50,20 +50,66 @@ const Body = styled.p`
   margin: 0;
 `
 
+const MailLink = styled.a`
+  display: inline-block;
+  margin-top: 18px;
+  color: #1D3C34;
+  font-weight: 600;
+  text-decoration: underline;
+`
+
 export default function StoragePaymentSuccess() {
   const router = useRouter()
   const { bookingId } = router.query as { bookingId?: string }
+  const [errored, setErrored] = useState(false)
+  const ranRef = useRef(false)
 
   useEffect(() => {
+    if (!router.isReady) return
     if (!bookingId) return
+    // React 18 StrictMode mounts effects twice in dev — guard so we don't
+    // double-fire the confirm-payment call.
+    if (ranRef.current) return
+    ranRef.current = true
+
+    // Ask the server to verify with Rapyd that the payment actually went
+    // through. The server writes both `Payment Status: 'Paid'` and the
+    // `Rapyd Payment ID` (needed for future refunds). If this call fails or
+    // returns 409 (Rapyd hasn't captured yet), the webhook will catch up
+    // within seconds — so we still redirect either way.
     axios
-      .patch(`/api/storage/${bookingId}`, { 'Payment Status': 'Paid' })
+      .post('/api/storage/confirm-payment', { bookingId })
       .finally(() => {
-        // Always redirect to the order page — even if the PATCH fails the
-        // rapyd-webhook will catch the payment and mark it Paid
         router.replace(`/storage/${bookingId}`)
       })
-  }, [bookingId])
+  }, [router.isReady, bookingId, router])
+
+  // Safety net: if `bookingId` never arrives (stale URL, manual paste),
+  // show a friendly error after a beat instead of spinning forever.
+  useEffect(() => {
+    if (!router.isReady) return
+    if (bookingId) return
+    const timeout = setTimeout(() => setErrored(true), 4000)
+    return () => clearTimeout(timeout)
+  }, [router.isReady, bookingId])
+
+  if (errored) {
+    return (
+      <Page>
+        <NextSeo title='Booking not found — BagBee' noindex />
+        <Card>
+          <Icon>⚠️</Icon>
+          <Title>We couldn&apos;t find that booking</Title>
+          <Body>
+            The link you used may be incomplete. If you just paid, your booking
+            should appear in your email. Otherwise, please contact us and
+            we&apos;ll sort it out.
+          </Body>
+          <MailLink href='mailto:bagbee@bagbee.is'>bagbee@bagbee.is</MailLink>
+        </Card>
+      </Page>
+    )
+  }
 
   return (
     <Page>
