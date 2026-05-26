@@ -288,6 +288,8 @@ type Form = {
   pickupAddress: string
   hotelName: string
   deliveryAddress: string
+  deliveryDate: string
+  deliveryTimeWindow: string
   flightNumber: string
   bagsRegular: string
   bagsOdd: string
@@ -311,6 +313,8 @@ const initial: Form = {
   pickupAddress: '',
   hotelName: '',
   deliveryAddress: '',
+  deliveryDate: '',
+  deliveryTimeWindow: '',
   flightNumber: '',
   bagsRegular: '',
   bagsOdd: '0',
@@ -434,6 +438,8 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
         pickupAddress: form.pickupAddress.trim(),
         hotelName: form.hotelName.trim() || undefined,
         deliveryAddress: form.deliveryAddress.trim() || undefined,
+        deliveryDate: form.deliveryDate.trim() || undefined,
+        deliveryTimeWindow: form.deliveryTimeWindow.trim() || undefined,
         flightNumber: form.flightNumber.trim() || undefined,
         bagsRegular: Number(form.bagsRegular) || 0,
         bagsOdd: Number(form.bagsOdd) || 0,
@@ -600,6 +606,32 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
                   placeholder="KEF / hotel / venue"
                   value={form.deliveryAddress}
                   onChange={(e) => setField('deliveryAddress', e.target.value)}
+                />
+              </div>
+            </Field>
+
+            {/* Delivery date / time-window. For Pickup & Delivery bookings
+                the partner sometimes wants the bags dropped off on a
+                different day or at a specific time. Leave both empty for
+                same-day delivery in the same window as pickup — the
+                back-end defaults delivery date to pickup date when
+                this is blank. */}
+            <Field>
+              <div>
+                <Label>Delivery date (leave empty for same day)</Label>
+                <Input
+                  type="date"
+                  min={form.pickupDate || todayYmd()}
+                  value={form.deliveryDate}
+                  onChange={(e) => setField('deliveryDate', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Delivery time window</Label>
+                <Input
+                  placeholder="e.g. 14:00 - 15:00"
+                  value={form.deliveryTimeWindow}
+                  onChange={(e) => setField('deliveryTimeWindow', e.target.value)}
                 />
               </div>
             </Field>

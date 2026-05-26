@@ -87,6 +87,13 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
       pickupAddress,
       deliveryAddress:
         typeof b.deliveryAddress === 'string' ? b.deliveryAddress.trim() || undefined : undefined,
+      // Optional — defaults server-side to pickupDate if omitted (most
+      // partner P&D bookings are same-day).
+      deliveryDate: isYmd(b.deliveryDate) ? b.deliveryDate : undefined,
+      deliveryTimeWindow:
+        typeof b.deliveryTimeWindow === 'string'
+          ? b.deliveryTimeWindow.trim() || undefined
+          : undefined,
       hotelName:
         typeof b.hotelName === 'string' ? b.hotelName.trim() || undefined : undefined,
       airline: typeof b.airline === 'string' ? b.airline.trim() || undefined : undefined,

@@ -688,6 +688,10 @@ export type NewOrderInput = {
   timeWindow: string
   pickupAddress: string
   deliveryAddress?: string
+  // Delivery date defaults to the pickup date when omitted (same-day
+  // Pickup & Delivery is the common case). Time window similarly.
+  deliveryDate?: string // YYYY-MM-DD
+  deliveryTimeWindow?: string
   hotelName?: string
   airline?: string
   flightNumber?: string
@@ -750,10 +754,27 @@ export const createPartnerOrder = async (
     // own those for invoice-business orders.
     [FIELDS.language]: input.language || 'en',
     [FIELDS.currency]: 'ISK',
-    [FIELDS.updateTrigger]: ['Update OC'],
+    // DO NOT set the Update OC trigger on creation — that flag is for
+    // EDITS only. Setting it on a brand-new order makes the customer
+    // receive both a booking confirmation AND a spurious "your order
+    // was updated" email at the same time. The new-order side has its
+    // own confirmation flow (Zap 262806875 on Greitt flip).
   }
 
-  if (input.deliveryAddress) fields[FIELDS.shortAddress] = input.deliveryAddress
+  // Delivery address writes to the canonical Delivery Address column —
+  // shortAddress is a separate display field that doubles as the airport
+  // drop-off label, not the delivery address itself. Writing to
+  // shortAddress made the actual Delivery Address column stay empty and
+  // the customer confirmation email had no delivery address in it.
+  if (input.deliveryAddress) {
+    fields[FIELDS.deliveryAddress] = input.deliveryAddress
+  }
+  // Delivery date defaults to pickup date (same-day P&D is most common).
+  // Partner can override via the form.
+  fields[FIELDS.deliveryDate] = input.deliveryDate || input.pickupDate
+  if (input.deliveryTimeWindow && input.deliveryTimeWindow.trim()) {
+    fields[FIELDS.deliveryTimeWindow] = input.deliveryTimeWindow.trim()
+  }
   if (input.airline) fields[FIELDS.airline] = input.airline
   if (input.flightNumber) fields[FIELDS.flightNumberFull] = input.flightNumber
   if (input.destinationCode) fields[FIELDS.destinationAirport] = input.destinationCode
