@@ -809,7 +809,24 @@ export const createPartnerOrder = async (
   // Delivery date defaults to pickup date (same-day P&D is most common).
   // Partner can override via the form.
   fields[FIELDS.deliveryDate] = input.deliveryDate || input.pickupDate
-  if (input.deliveryTimeWindow && input.deliveryTimeWindow.trim()) {
+
+  // Check-in service has standard airport-side delivery windows that
+  // don't depend on partner input — they're set by operational shift:
+  //   - Pickup before 15:00 → Morning shift → 08:00-16:00 airport window
+  //   - Pickup 15:00 or later → Evening shift → 17:00-01:00 (spans midnight)
+  // The new-order form hides the delivery-time field for Check-in to
+  // avoid confusing the partner; if anything is sent we ignore it.
+  // The 15:00 cutoff mirrors the shift (formula) field in Airtable
+  // (fldkdoNmHwjvu6JU9) so this stays consistent with the rest of
+  // dispatch.
+  if (input.serviceType === 'Check-in service') {
+    const pickupHourMatch = /^(\d{1,2}):/.exec(input.timeWindow.trim())
+    const pickupHour = pickupHourMatch ? Number(pickupHourMatch[1]) : null
+    const isMorning = pickupHour != null && pickupHour < 15
+    fields[FIELDS.deliveryTimeWindow] = isMorning
+      ? '08:00 - 16:00'
+      : '17:00 - 01:00'
+  } else if (input.deliveryTimeWindow && input.deliveryTimeWindow.trim()) {
     fields[FIELDS.deliveryTimeWindow] = input.deliveryTimeWindow.trim()
   }
   if (input.airline) fields[FIELDS.airline] = input.airline

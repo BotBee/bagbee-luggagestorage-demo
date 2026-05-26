@@ -637,26 +637,34 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
                 different day or at a specific time. Leave both empty for
                 same-day delivery in the same window as pickup — the
                 back-end defaults delivery date to pickup date when
-                this is blank. */}
-            <Field>
-              <div>
-                <Label>Delivery date (leave empty for same day)</Label>
-                <Input
-                  type="date"
-                  min={form.pickupDate || todayYmd()}
-                  value={form.deliveryDate}
-                  onChange={(e) => setField('deliveryDate', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Delivery time window</Label>
-                <Input
-                  placeholder="e.g. 14:00 - 15:00"
-                  value={form.deliveryTimeWindow}
-                  onChange={(e) => setField('deliveryTimeWindow', e.target.value)}
-                />
-              </div>
-            </Field>
+                this is blank.
+
+                Hidden for Check-in service: airport-side delivery
+                windows are standard (08:00-16:00 morning shift,
+                17:00-01:00 evening shift) and set server-side based on
+                pickup time. The partner doesn't need to think about
+                this for check-in bookings. */}
+            {form.serviceType !== 'Check-in service' && (
+              <Field>
+                <div>
+                  <Label>Delivery date (leave empty for same day)</Label>
+                  <Input
+                    type="date"
+                    min={form.pickupDate || todayYmd()}
+                    value={form.deliveryDate}
+                    onChange={(e) => setField('deliveryDate', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Delivery time window</Label>
+                  <Input
+                    placeholder="e.g. 14:00 - 15:00"
+                    value={form.deliveryTimeWindow}
+                    onChange={(e) => setField('deliveryTimeWindow', e.target.value)}
+                  />
+                </div>
+              </Field>
+            )}
 
             <Field>
               <div>
