@@ -9,18 +9,29 @@ import getAppConfig from '../../../modules/config'
  *
  * Flow:
  *  1. Look up the order by `Pöntunarnúmer (fx)`.
- *  2. Refuse cancellation if status is `In progress`, `Delivered`, or already
- *     `Cancelled` — at that point the driver has already started moving bags
- *     around and refunds need human review.
- *  3. Collect every Rapyd payment ID for the order (new multiline
- *     `Rapyd Payment IDs` field, falling back to singular `Rapyd Payment ID`
- *     for older orders that predate the multiline field).
- *  4. Refund each payment via Rapyd's `POST /v1/refunds`. Track per-payment
- *     success/failure. If any refund fails, mark the record
- *     `Refund Status = 'Refund Failed'` so BagBee staff can follow up manually.
+ *  2. Refuse cancellation if status is `Planned`, `In progress`, `Delivered`,
+ *     or already `Cancelled` — at that point dispatch has assigned a route /
+ *     the driver has started moving bags around and changes need human review.
+ *     (Until 2026-05-26 the cutoff was only at `In progress`; `Planned` was
+ *     added so dispatch isn't surprised by a customer self-cancel after
+ *     they've planned the day.)
+ *  3. Check whether we're inside the no-refund window (<24h before pickup).
+ *     If so, we still allow the cancel — but skip the Rapyd refund. The UI
+ *     warns the customer about this BEFORE they confirm, so it's not a
+ *     surprise. The order is marked Cancelled in Airtable either way.
+ *  4. For normal cancels (≥24h): collect every Rapyd payment ID (new
+ *     multiline `Rapyd Payment IDs` field, falling back to singular
+ *     `Rapyd Payment ID` for older orders), refund each via Rapyd's
+ *     `POST /v1/refunds`, mark `Refund Status = 'Refunded' | 'Refund Failed'`.
  *  5. Set `Update Order (add bags, send order confirmation etc)` to
  *     `['Cancel & Refund']` which the `Order Status` formula reads and
  *     resolves to `"Cancelled"` — no need to write a single-select directly.
+ *
+ * Response shape:
+ *  - `{ success: true, lateCancel: true, paymentCount }` — late cancel, no
+ *    Rapyd refund attempted, Airtable marked Cancelled.
+ *  - `{ success: true, refundStatus, refunds, paymentCount }` — normal
+ *    cancel, refunds attempted.
  *
  * Auth model: the `orderNo` is the customer-facing 5-char identifier already
  * embedded in the order URL. Anyone who knows that URL can cancel; that matches
@@ -107,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const record = records[0]
 
-    // Disallow cancellation if the order is already in motion.
+    // Disallow cancellation if dispatch is already on the case.
     const rawStatus: any = record.fields['Order Status']
     const statusName =
       typeof rawStatus === 'string'
@@ -115,7 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : rawStatus && typeof rawStatus === 'object' && 'name' in rawStatus
           ? String((rawStatus as any).name)
           : ''
-    const blocked = ['In progress', 'In Progress', 'Delivered', 'Cancelled']
+    const blocked = ['Planned', 'In progress', 'In Progress', 'Delivered', 'Cancelled']
     if (blocked.includes(statusName)) {
       return res.status(409).json({
         message: `Cannot cancel order with status "${statusName}"`,
@@ -123,11 +134,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // Self-service cancellation is only allowed up to 24h before the pickup
-    // window starts. Inside that window the customer has to call/email BagBee —
-    // we still want the refund to be a human decision.
+    // Determine whether we're inside the no-refund window (<24h before
+    // pickup). Unlike before, this no longer BLOCKS the cancel — it just
+    // skips the Rapyd refund. The UI warns the customer before they confirm.
     const pickupDateStr = String(record.fields['Dagsetning pick-up'] || '').trim()
     const pickupWindowStr = String(record.fields['Tímasetning'] || '').trim()
+    let lateCancel = false
     if (pickupDateStr) {
       const m = pickupWindowStr.match(/^(\d{1,2}):(\d{2})/)
       const hh = m ? m[1].padStart(2, '0') : '00'
@@ -136,10 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const pickupAt = new Date(`${pickupDateStr}T${hh}:${mm}:00Z`)
       const hoursUntil = (pickupAt.getTime() - Date.now()) / 3_600_000
       if (!isNaN(hoursUntil) && hoursUntil < 24) {
-        return res.status(409).json({
-          message: 'tooLate',
-          hoursUntil,
-        })
+        lateCancel = true
       }
     }
 
@@ -156,9 +165,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
 
     // Refund each payment (parallel — Rapyd doesn't rate-limit this and they
-    // target different transactions).
+    // target different transactions). Skip entirely on late cancellations —
+    // the customer was warned, no refund is owed.
     const results: RefundResult[] =
-      paymentIds.length === 0
+      lateCancel || paymentIds.length === 0
         ? []
         : await Promise.all(paymentIds.map((id) => refundOne(id, orderNo)))
 
@@ -169,10 +179,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     //  - `Refund Status` singleSelect choices: Refund Requested / Refunded / Refund Failed
     //    (no Partial / Not Applicable options exist, so we collapse:
     //      all ok → Refunded, any fail → Refund Failed,
-    //      no payments → leave Refund Status unchanged since there's nothing
-    //      to refund and "Refund Failed" would be misleading.)
+    //      no payments OR late cancel → leave Refund Status unchanged since
+    //      there's nothing to refund and "Refund Failed" would be misleading.)
     const refundStatus =
-      paymentIds.length === 0 ? null : allOk ? 'Refunded' : 'Refund Failed'
+      lateCancel || paymentIds.length === 0
+        ? null
+        : allOk
+          ? 'Refunded'
+          : 'Refund Failed'
 
     // Clear Update Order first so the automation retriggers even if it was
     // already set to Cancel & Refund (matches the pattern in
@@ -186,7 +200,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     return res.status(200).json({
-      success: allOk,
+      success: lateCancel || allOk,
+      lateCancel,
       refundStatus,
       refunds: results,
       paymentCount: paymentIds.length,

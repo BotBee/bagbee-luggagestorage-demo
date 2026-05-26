@@ -312,7 +312,10 @@ const orderTrackingPage = {
     confirmTitle: 'Cancel this order?',
     confirmBody: (amount: string) =>
       `You'll receive a full refund of ${amount} ISK to your original payment method. This can take a few minutes to appear. This action cannot be undone.`,
+    confirmBodyNoRefund:
+      'You can still cancel the order, but a refund is no longer possible at this point. This action cannot be undone.',
     confirmButton: 'Yes, cancel and refund',
+    confirmButtonNoRefund: 'Yes, cancel without refund',
     keepButton: 'Keep order',
     cancelling: 'Cancelling…',
     doneTitle: 'Order cancelled',
@@ -322,10 +325,14 @@ const orderTrackingPage = {
       'Your order has been cancelled, but one or more refunds could not be processed automatically. BagBee will contact you to complete the refund.',
     successNoPayments:
       'Your order has been cancelled. No payment was on file, so no refund is needed.',
+    successNoRefund:
+      'Your order has been cancelled. No refund was issued because you cancelled within 24 hours of service.',
     error:
       'We could not cancel the order. Please try again or contact BagBee directly.',
     tooLate:
-      'Online cancellation is only available up to 24 hours before pickup. Please contact BagBee directly.',
+      'Online cancellation is only available up to 24 hours before service. Please contact BagBee directly.',
+    noRefund:
+      'You can still cancel the order, but a refund is no longer possible at this point.',
     close: 'Close',
   },
 

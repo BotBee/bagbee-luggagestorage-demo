@@ -1199,7 +1199,12 @@ const OrderPage = ({
     const hours = (pickupAt.getTime() - Date.now()) / 3_600_000
     return isNaN(hours) ? Infinity : hours
   })()
-  const canCancel = cancelHoursUntilPickup >= 24
+  // ≥24h before pickup → cancellation gets a full Rapyd refund.
+  // <24h → cancel still allowed (the link stays visible) but no refund is
+  // issued. The UI warns the customer before they confirm. The hard cutoff
+  // for cancellation is the order's status, not the clock — see the
+  // blocklist in the UI checks below and in /api/order/cancel.ts.
+  const cancelHasRefund = cancelHoursUntilPickup >= 24
 
   const startEditing = () => {
     setEditBags(originalBags || 1)
@@ -1462,11 +1467,13 @@ const OrderPage = ({
         setCancelResult({
           success: true,
           message:
-            data.paymentCount === 0
-              ? t.cancelOrder.successNoPayments
-              : data.refundStatus === 'Refunded'
-                ? t.cancelOrder.successRefunded
-                : t.cancelOrder.successPartial,
+            data.lateCancel === true
+              ? t.cancelOrder.successNoRefund
+              : data.paymentCount === 0
+                ? t.cancelOrder.successNoPayments
+                : data.refundStatus === 'Refunded'
+                  ? t.cancelOrder.successRefunded
+                  : t.cancelOrder.successPartial,
         })
         // Give the user a moment to read the result, then reload so the UI
         // reflects the new Cancelled status from Airtable.
@@ -1691,39 +1698,35 @@ const OrderPage = ({
 
                 {!isEditing &&
                   !editSubmitted &&
-                  !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                  !['Planned', 'In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
                     status as string,
-                  ) &&
-                  canCancel && (
-                    <CancelOrderRow>
-                      <CancelOrderLink
-                        onClick={() => {
-                          setCancelResult(null)
-                          setShowCancelModal(true)
-                        }}
-                      >
-                        {t.cancelOrder.linkText}
-                      </CancelOrderLink>
-                    </CancelOrderRow>
-                  )}
-                {!isEditing &&
-                  !editSubmitted &&
-                  !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
-                    status as string,
-                  ) &&
-                  !canCancel && (
-                    <p
-                      style={{
-                        fontFamily: 'Poppins, sans-serif',
-                        fontSize: 12,
-                        color: '#a3a4a7',
-                        textAlign: 'center',
-                        marginTop: 16,
-                        marginBottom: 0,
-                      }}
-                    >
-                      {t.cancelOrder.tooLate}
-                    </p>
+                  ) && (
+                    <>
+                      <CancelOrderRow>
+                        <CancelOrderLink
+                          onClick={() => {
+                            setCancelResult(null)
+                            setShowCancelModal(true)
+                          }}
+                        >
+                          {t.cancelOrder.linkText}
+                        </CancelOrderLink>
+                      </CancelOrderRow>
+                      {!cancelHasRefund && (
+                        <p
+                          style={{
+                            fontFamily: 'Poppins, sans-serif',
+                            fontSize: 12,
+                            color: '#a3a4a7',
+                            textAlign: 'center',
+                            marginTop: 8,
+                            marginBottom: 0,
+                          }}
+                        >
+                          {t.cancelOrder.noRefund}
+                        </p>
+                      )}
+                    </>
                   )}
               </StatusCard>
             </Section>
@@ -1855,39 +1858,35 @@ const OrderPage = ({
                   still actionable (not In progress / Delivered / Cancelled). */}
               {!isEditing &&
                 !editSubmitted &&
-                !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
+                !['Planned', 'In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
                   status as string,
-                ) &&
-                canCancel && (
-                  <CancelOrderRow>
-                    <CancelOrderLink
-                      onClick={() => {
-                        setCancelResult(null)
-                        setShowCancelModal(true)
-                      }}
-                    >
-                      {t.cancelOrder.linkText}
-                    </CancelOrderLink>
-                  </CancelOrderRow>
-                )}
-              {!isEditing &&
-                !editSubmitted &&
-                !['In progress', 'In Progress', 'Delivered', 'Cancelled'].includes(
-                  status as string,
-                ) &&
-                !canCancel && (
-                  <p
-                    style={{
-                      fontFamily: 'Poppins, sans-serif',
-                      fontSize: 12,
-                      color: '#a3a4a7',
-                      textAlign: 'center',
-                      marginTop: 16,
-                      marginBottom: 0,
-                    }}
-                  >
-                    {t.cancelOrder.tooLate}
-                  </p>
+                ) && (
+                  <>
+                    <CancelOrderRow>
+                      <CancelOrderLink
+                        onClick={() => {
+                          setCancelResult(null)
+                          setShowCancelModal(true)
+                        }}
+                      >
+                        {t.cancelOrder.linkText}
+                      </CancelOrderLink>
+                    </CancelOrderRow>
+                    {!cancelHasRefund && (
+                      <p
+                        style={{
+                          fontFamily: 'Poppins, sans-serif',
+                          fontSize: 12,
+                          color: '#a3a4a7',
+                          textAlign: 'center',
+                          marginTop: 8,
+                          marginBottom: 0,
+                        }}
+                      >
+                        {t.cancelOrder.noRefund}
+                      </p>
+                    )}
+                  </>
                 )}
             </StatusCard>
           </Section>
@@ -2925,9 +2924,11 @@ const OrderPage = ({
             <ModalBody>
               {cancelResult
                 ? cancelResult.message
-                : t.cancelOrder.confirmBody(
-                    Number(fields['Upphæð'] || 0).toLocaleString('is-IS'),
-                  )}
+                : cancelHasRefund
+                  ? t.cancelOrder.confirmBody(
+                      Number(fields['Upphæð'] || 0).toLocaleString('is-IS'),
+                    )
+                  : t.cancelOrder.confirmBodyNoRefund}
             </ModalBody>
             {!cancelResult && (
               <ModalButtonRow>
@@ -2944,7 +2945,9 @@ const OrderPage = ({
                 >
                   {cancelling
                     ? t.cancelOrder.cancelling
-                    : t.cancelOrder.confirmButton}
+                    : cancelHasRefund
+                      ? t.cancelOrder.confirmButton
+                      : t.cancelOrder.confirmButtonNoRefund}
                 </ModalPrimaryButton>
               </ModalButtonRow>
             )}

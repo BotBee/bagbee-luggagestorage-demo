@@ -180,7 +180,7 @@ const orderTrackingPage = {
   // Service types
   departureService: 'Innritunarþjónusta',
   arrivalService: 'Komuþjónusta',
-  pickupDeliveryService: 'Sókn og afhending',
+  pickupDeliveryService: 'Töskuflutningur',
 
   // Status names
   status: {
@@ -222,7 +222,7 @@ const orderTrackingPage = {
   address: 'Heimilisfang',
   pickupAddress: 'Heimilisfang',
   deliveryAddress: 'Afhendingarstaður',
-  addressLabel: 'Sóknarstaður',
+  addressLabel: 'Heimilisfang',
   standardSuffix: 'venjulegar',
   oddSizeSuffix: 'yfirstærð',
   totalSuffix: 'samtals',
@@ -236,7 +236,7 @@ const orderTrackingPage = {
 
   // Edit section
   editOrder: 'Breyta pöntun',
-  editOrderDescription: 'Breyttu sóknartíma, heimilisfangi eða fjölda taska.',
+  editOrderDescription: 'Breyttu tímasetningu, heimilisfangi eða fjölda taska.',
   updateYourOrder: 'Uppfæra pöntun',
   standardBags: 'Venjulegar töskur',
   oddSizeBags: 'Töskur í yfirstærð',
@@ -315,7 +315,10 @@ const orderTrackingPage = {
     confirmTitle: 'Hætta við þessa pöntun?',
     confirmBody: (amount: string) =>
       `Þú færð fulla endurgreiðslu upp á ${amount} kr. á sömu greiðslukort. Það getur tekið nokkrar mínútur að birtast. Ekki er hægt að afturkalla þessa aðgerð.`,
+    confirmBodyNoRefund:
+      'Þú getur enn hætt við pöntunina, en á þessum tímapunkti er ekki hægt að endurgreiða. Ekki er hægt að afturkalla þessa aðgerð.',
     confirmButton: 'Já, hætta við og endurgreiða',
+    confirmButtonNoRefund: 'Já, hætta við án endurgreiðslu',
     keepButton: 'Halda pöntun',
     cancelling: 'Hætti við…',
     doneTitle: 'Pöntun hætt við',
@@ -325,21 +328,25 @@ const orderTrackingPage = {
       'Pöntuninni var hætt við, en ekki tókst að endurgreiða að fullu sjálfkrafa. BagBee hefur samband til að ljúka endurgreiðslu.',
     successNoPayments:
       'Pöntuninni hefur verið hætt við. Engin greiðsla var skráð, svo engin endurgreiðsla þarf að fara fram.',
+    successNoRefund:
+      'Pöntuninni hefur verið hætt við. Engin endurgreiðsla fer fram þar sem hætt var við innan 24 klukkustunda fyrir þjónustu.',
     error:
       'Ekki tókst að hætta við pöntun. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
     tooLate:
-      'Eingöngu er hægt að hætta við á netinu allt að 24 klukkustundum fyrir sókn. Vinsamlegast hafðu samband við BagBee.',
+      'Eingöngu er hægt að hætta við á netinu allt að 24 klukkustundum fyrir þjónustu. Vinsamlegast hafðu samband við BagBee.',
+    noRefund:
+      'Þú getur enn hætt við pöntunina, en á þessum tímapunkti er ekki hægt að endurgreiða.',
     close: 'Loka',
   },
 
   // P&D edit form
-  editPickupSection: 'Sókn',
+  editPickupSection: 'Sótt',
   editDeliverySection: 'Afhending',
-  pickupAddressLabel: 'Sóknarstaður',
+  pickupAddressLabel: 'Heimilisfang',
   deliveryAddressLabel: 'Afhendingarstaður',
-  pickupDateLabel: 'Dagsetning sóknar',
+  pickupDateLabel: 'Dagsetning þjónustu',
   deliveryDateLabel: 'Dagsetning afhendingar',
-  pickupTimeWindowLabel: 'Sóknartími',
+  pickupTimeWindowLabel: 'Tímasetning',
   deliveryTimeWindowLabel: 'Afhendingartími',
   timeWindowPlaceholder: 't.d. 09:00 - 11:00',
 
