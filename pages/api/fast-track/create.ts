@@ -133,7 +133,12 @@ export default async function handler(
       country: 'IS',
       language: 'EN',
       merchant_reference_id: `bagbee-fast-track-${fastTrackId}`,
-      payment_method_type_categories: ['card', 'bank_redirect'],
+      // payment_method_type_categories deliberately omitted — `bank_redirect`
+      // is disabled on our Rapyd merchant account, which caused Rapyd to
+      // reject the checkout with ERROR_HOSTED_PAGE_PAYMENT_METHOD_TYPE_
+      // CATEGORIES_NOT_ENABLED. Every other working flow (main booking,
+      // storage, surcharge) omits this field and lets Rapyd use the
+      // account's default categories. Match that pattern here.
       complete_payment_url: successUrl,
       error_payment_url: errorUrl,
       // Webhook (/api/payment/webhooks) reads metadata.recordId +

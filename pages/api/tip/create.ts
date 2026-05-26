@@ -69,7 +69,11 @@ export default async function handler(
       country: 'IS',
       language: 'EN',
       merchant_reference_id: `bagbee-tip-${orderNo}-${Date.now()}`,
-      payment_method_type_categories: ['card', 'bank_redirect'],
+      // payment_method_type_categories deliberately omitted — see
+      // pages/api/fast-track/create.ts for the same fix. bank_redirect is
+      // disabled in our Rapyd account; omitting the field lets Rapyd use
+      // the account's default categories (card etc), which is what every
+      // other working flow does.
       complete_payment_url: `${baseUrl}/api/tip/payment-success?${params.toString()}`,
       error_payment_url: `${baseUrl}/orders/${orderNo}?tip_error=true`,
     }
