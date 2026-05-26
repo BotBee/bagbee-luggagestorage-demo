@@ -22,7 +22,6 @@ export const ApplicationRoutes = {
   apiBook: '/api/book',
   AirTable: {
     apiAirtableCreate: '/api/airtable/create',
-    apiAirtableRead: '/api/airtable/read',
     apiAirtableUpdatePayedStatus: '/api/airtable/update-paid-status',
     apiAirtableFastTrackCreate: '/api/airtable/fast-track/create',
     apiAirtableFastTrackRead: '/api/airtable/fast-track/read',

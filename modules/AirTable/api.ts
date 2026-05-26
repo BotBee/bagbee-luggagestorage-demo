@@ -2,23 +2,6 @@ import { AirtableFastTrackOrder, AirtableOrder } from '../../common/types'
 import { ApplicationRoutes } from '../../utils/routing'
 import { DiscountCodeResponse } from '../../pages/api/airtable/discount'
 
-export const getOrderById = async (orderId: AirtableOrder) => {
-  try {
-    const res = await fetch(ApplicationRoutes.AirTable.apiAirtableRead, {
-      method: 'POST',
-      mode: 'cors',
-      body: JSON.stringify(orderId),
-      headers: { 'content-type': 'application/json' },
-    })
-
-    return res.json()
-  } catch (error: any) {
-    // TODO: Add error handling...
-    console.error(error)
-    throw error
-  }
-}
-
 export const createOrder = async (order: AirtableOrder) => {
   try {
     const res = await fetch(ApplicationRoutes.AirTable.apiAirtableCreate, {
