@@ -153,6 +153,9 @@ export async function loadActiveBookings(): Promise<BookingRecord[]> {
         NOT({RemoteLock sync status} = 'Revoked')
       )`,
       pageSize: 100,
+      // Return fields keyed by ID, not name — sync.ts reads by ID via FLD
+      // constants. Without this, every field read returns undefined.
+      returnFieldsByFieldId: true,
     })
     .eachPage((page, fetchNextPage) => {
       records.push(...page)
@@ -188,7 +191,7 @@ export async function loadLockers(): Promise<LockerRecord[]> {
   const base = getBase()
   const records: LockerRecord[] = []
   await base<LockerFields>(KEF_LOCKERS_TABLE)
-    .select({ pageSize: 100 })
+    .select({ pageSize: 100, returnFieldsByFieldId: true })
     .eachPage((page, fetchNextPage) => {
       records.push(...page)
       fetchNextPage()
