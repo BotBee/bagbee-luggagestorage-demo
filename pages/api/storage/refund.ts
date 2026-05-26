@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto'
 import Airtable from 'airtable'
 import { NextApiRequest, NextApiResponse } from 'next'
 import getAppConfig from '../../../modules/config'
@@ -22,9 +23,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     serverRuntimeConfig: { airtableAccessToken, airtableBaseId, airtableEndpointUrl, storageRefundSecret },
   } = getAppConfig()
 
-  // Require secret header — prevents anyone with a bookingId from triggering refunds
-  const providedSecret = req.headers['x-refund-secret']
-  if (!storageRefundSecret || providedSecret !== storageRefundSecret) {
+  // Require secret header — prevents anyone with a bookingId from triggering
+  // refunds. Constant-time compare so the secret can't be inferred byte-by-byte
+  // from response timing. Mirrors the pattern in partners/.../verify-code.ts.
+  const headerVal = req.headers['x-refund-secret']
+  const providedSecret = Array.isArray(headerVal) ? headerVal[0] : headerVal
+  if (!storageRefundSecret || typeof providedSecret !== 'string') {
+    return res.status(403).json({ message: 'Forbidden' })
+  }
+  const provided = Buffer.from(providedSecret)
+  const expected = Buffer.from(storageRefundSecret)
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
     return res.status(403).json({ message: 'Forbidden' })
   }
 

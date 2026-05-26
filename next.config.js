@@ -24,6 +24,30 @@ const serverRuntimeConfig = {
   storageRefundSecret: process.env.STORAGE_REFUND_SECRET,
 }
 
+// Baseline security headers applied to every route. Deliberately conservative:
+//
+// - Strict-Transport-Security pins HTTPS for 2 years. `preload` opted-in so
+//   the domain can be added to the HSTS preload list later if we want.
+//   Safe because the production site has been HTTPS-only for years.
+// - X-Content-Type-Options blocks MIME sniffing.
+// - X-Frame-Options: SAMEORIGIN — nothing legitimate iframes bagbee.is from
+//   a third party (would block clickjacking of /orders, refund, etc.).
+// - Referrer-Policy: strict-origin-when-cross-origin — sends just the host
+//   (not full URL with ?orderNo=…) to third-party scripts (GA, GTM, etc.).
+// - Permissions-Policy disables APIs we never use (camera, mic, geo).
+//
+// NOT included yet (separate task): Content-Security-Policy. Would need to
+// allowlist GTM / GA / HubSpot / Hotjar / Rapyd-Apple-Pay / Google Maps /
+// Stripe Apple Pay JS / Contentful images / Airtable user content. Worth
+// doing in a dedicated PR with `Content-Security-Policy-Report-Only` first.
+const SECURITY_HEADERS = [
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=()' },
+]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   publicRuntimeConfig,
@@ -41,6 +65,14 @@ const nextConfig = {
     locales: ['en', 'is'],
     defaultLocale: 'is',
     localeDetection: false,
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: SECURITY_HEADERS,
+      },
+    ]
   },
 }
 

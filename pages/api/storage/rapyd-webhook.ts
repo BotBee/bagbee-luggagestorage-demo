@@ -22,15 +22,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rawBody = await getRawBody(req)
     const payload = JSON.parse(rawBody.toString())
 
-    // Verify signature when webhook secret is configured
+    // Fail closed: if the webhook secret isn't configured, refuse every
+    // request. The old `if (webhookSecret)` made signature verification
+    // optional — without the env var, a forged POST to this endpoint
+    // could mark any storage booking as paid without anyone paying. We
+    // would rather a misconfigured deploy 500 (loud) than silently
+    // accept unauthenticated traffic (quiet → real money lost).
     const webhookSecret = process.env.RAPYD_WEBHOOK_SECRET
-    if (webhookSecret) {
-      const sig = req.headers['rapyd-signature'] as string
-      const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex')
-      if (sig !== expected) {
-        console.error('[Storage Rapyd Webhook] Signature mismatch')
-        return res.status(401).end()
-      }
+    if (!webhookSecret) {
+      console.error(
+        '[Storage Rapyd Webhook] RAPYD_WEBHOOK_SECRET is not set; refusing request'
+      )
+      return res.status(500).end()
+    }
+    const sig = req.headers['rapyd-signature'] as string
+    const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex')
+    if (sig !== expected) {
+      console.error('[Storage Rapyd Webhook] Signature mismatch')
+      return res.status(401).end()
     }
 
     const eventType: string = payload.type
