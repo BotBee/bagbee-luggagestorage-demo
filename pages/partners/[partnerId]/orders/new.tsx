@@ -766,7 +766,7 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
 
             <Label>Notes</Label>
             <Textarea
-              placeholder="Anything BagBee should know — guide name, signage, etc."
+              placeholder="Anything BagBee should know - guide information, bus company, signage etc."
               value={form.comment}
               onChange={(e) => setField('comment', e.target.value)}
             />
