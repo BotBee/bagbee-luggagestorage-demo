@@ -1,5 +1,5 @@
 import styled from '@emotion/styled'
-import { Error as AirtableError } from 'airtable'
+import type { Error as AirtableError } from 'airtable'
 import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
 import { useContext } from 'react'
@@ -126,7 +126,11 @@ const ConfirmOrder = () => {
         mapToOrder(freshBooking, locale ?? '', referrer ?? ''),
       ).catch((error: AirtableError) => {
         console.error('error')
-        throw new AirtableError(error.error, error.message, error.statusCode)
+        // Rethrow the original — `new AirtableError(error.error, error.message,
+        // error.statusCode)` produced an identical clone, and constructing
+        // it required `airtable` as a runtime import (which pulled ~200KB
+        // of server-only code into the browser bundle on this page).
+        throw error
       })
       // 100% discount → no Rapyd round-trip, go straight to the order
       // tracking page in the same shape a paid order lands on. mapToOrder

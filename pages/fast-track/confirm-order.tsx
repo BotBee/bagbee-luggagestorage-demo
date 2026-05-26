@@ -1,5 +1,5 @@
 import styled from '@emotion/styled'
-import { Error, FieldSet, Record } from 'airtable'
+import type { Error, FieldSet, Record } from 'airtable'
 import { useRouter } from 'next/router'
 import { NextSeo } from 'next-seo'
 import { useState } from 'react'
@@ -122,7 +122,12 @@ const ConfirmOrder = () => {
         mapToFastTrackOrder(fastTrack, locale ?? ''),
       ).catch((error: Error) => {
         console.error('error')
-        throw new Error(error.error, error.message, error.statusCode)
+        // Rethrow the original — `new Error(error.error, error.message,
+        // error.statusCode)` produced an identical clone of the airtable
+        // Error class, and constructing it required `airtable` as a
+        // runtime import (which pulled ~200KB of server-only code into
+        // the browser bundle on this page).
+        throw error
       })
       // If discount code is 100% then route user directly to success page
       if (discountCode && discountCode.Discount === 100) {
