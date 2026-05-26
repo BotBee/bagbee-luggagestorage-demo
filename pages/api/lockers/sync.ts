@@ -155,6 +155,28 @@ async function processBooking(
   const dropoffShift = shiftForEvent(new Date(checkInIso))
   const pickupShift = shiftForEvent(new Date(checkOutIso))
 
+  // TEMP diagnostic — remove once integration is verified end-to-end.
+  console.log('[lockers/sync] processBooking', {
+    bookingId: booking.id,
+    customerName: fields[FLD.bookings.customerName],
+    cancelled,
+    checkInIso,
+    checkOutIso,
+    pinIn,
+    pinOut,
+    lockerInIds,
+    lockerOutIds,
+    dropoffShift,
+    pickupShift,
+    now: new Date(now).toISOString(),
+    dropoffPushWindowOpens: new Date(dropoffShift.startMs - PUSH_AHEAD_MS).toISOString(),
+    pickupPushWindowOpens: new Date(pickupShift.startMs - PUSH_AHEAD_MS).toISOString(),
+    inDropoffWindow:
+      !pinIn && now >= dropoffShift.startMs - PUSH_AHEAD_MS && now < dropoffShift.endMs,
+    inPickupWindow:
+      !pinOut && now >= pickupShift.startMs - PUSH_AHEAD_MS && now < pickupShift.endMs,
+  })
+
   // ---- Completion: both PINs done and pickup shift has ended ---------------
   if (pinIn && pinOut && now > pickupShift.endMs) {
     await updateBooking(booking.id, {
