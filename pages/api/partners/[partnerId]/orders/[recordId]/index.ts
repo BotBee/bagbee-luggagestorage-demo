@@ -15,6 +15,7 @@ import {
   UpdateDiff,
 } from '../../../../../../utils/partnerNotifications'
 import { normalizePhone } from '../../../../../../utils/phoneNormalize'
+import { normalizeTimeWindow } from '../../../../../../utils/timeWindow'
 
 const EDITABLE_KEYS: EditableField[] = [
   'reference',
@@ -81,6 +82,16 @@ const sanitizeChanges = (
         out[key] = null
       } else if (typeof v === 'string') {
         out[key] = normalizePhone(v)
+      }
+      continue
+    }
+    if (key === 'timeWindow' || key === 'deliveryTimeWindow') {
+      // Normalize "11:45" → "11:45 - 12:45" so the Push-to-OR delivery
+      // formula gets a non-empty twTo. See utils/timeWindow.ts.
+      if (v == null || v === '') {
+        out[key] = null
+      } else if (typeof v === 'string') {
+        out[key] = normalizeTimeWindow(v)
       }
       continue
     }

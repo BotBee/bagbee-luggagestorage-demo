@@ -8,6 +8,7 @@ import {
 } from '../../../../../utils/partnerOrders'
 import { sendNewOrderApprovalNotice } from '../../../../../utils/partnerNotifications'
 import { normalizePhone } from '../../../../../utils/phoneNormalize'
+import { normalizeTimeWindow } from '../../../../../utils/timeWindow'
 
 // nudge HMR
 
@@ -83,7 +84,10 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
       serviceType: serviceType as NewOrderInput['serviceType'],
       flightDate,
       pickupDate,
-      timeWindow,
+      // Normalize time windows to "HH:MM - HH:MM" so the Push-to-OR
+      // delivery payload doesn't break on single-time entries (see
+      // utils/timeWindow.ts for the full story).
+      timeWindow: normalizeTimeWindow(timeWindow),
       pickupAddress,
       deliveryAddress:
         typeof b.deliveryAddress === 'string' ? b.deliveryAddress.trim() || undefined : undefined,
@@ -91,8 +95,8 @@ const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | {
       // partner P&D bookings are same-day).
       deliveryDate: isYmd(b.deliveryDate) ? b.deliveryDate : undefined,
       deliveryTimeWindow:
-        typeof b.deliveryTimeWindow === 'string'
-          ? b.deliveryTimeWindow.trim() || undefined
+        typeof b.deliveryTimeWindow === 'string' && b.deliveryTimeWindow.trim()
+          ? normalizeTimeWindow(b.deliveryTimeWindow)
           : undefined,
       hotelName:
         typeof b.hotelName === 'string' ? b.hotelName.trim() || undefined : undefined,
