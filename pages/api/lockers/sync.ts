@@ -120,6 +120,23 @@ async function processBooking(
   const lockerInIds = (fields[FLD.bookings.lockerIn] as string[] | undefined) ?? []
   const lockerOutIds = (fields[FLD.bookings.lockerOut] as string[] | undefined) ?? []
 
+  // TEMP unconditional diagnostic — bypasses all early returns.
+  if (!summary.debug) summary.debug = []
+  summary.debug.push({
+    where: 'entry',
+    bookingId: booking.id,
+    fieldKeys: Object.keys(fields),
+    cancelled,
+    checkInIso,
+    checkOutIso,
+    pinIn,
+    pinOut,
+    lockerInRaw: fields[FLD.bookings.lockerIn],
+    lockerOutRaw: fields[FLD.bookings.lockerOut],
+    lockerInIds,
+    lockerOutIds,
+  })
+
   // ---- Cancellation: revoke and mark ---------------------------------------
   if (cancelled) {
     let revoked = 0
