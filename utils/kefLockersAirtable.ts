@@ -30,8 +30,13 @@ export const FLD = {
     customerName: 'fldnUO0MmrxEDmeQP',
     checkInDatetime: 'fldmzZr5FeR4JoElC',
     checkOutDatetime: 'fldF20FNj2CSga4ZF',
-    lockerIn: 'fld1oD4Cr34vXnyTL', // multipleRecordLinks → Lockers (drop-off locker)
-    lockerOut: 'fldwnRH6pXoI5nEXR', // multipleRecordLinks → Lockers (pickup locker)
+    // `Locker (in/out) direct` — multipleRecordLinks → Lockers. Read by the
+    // PIN-push integration to find the TTLock lockId. The original
+    // `Locker-In` / `Locker-Out` fields (still on the table) link to the
+    // Availability table for capacity bookkeeping — different concern, not
+    // used by sync.ts.
+    lockerIn: 'fldpvLELel4CaIP9d',
+    lockerOut: 'fldXi8b7kfgYZ8cWT',
     pinIn: 'fldJSen4HBHkLA25K',
     pinOut: 'fldfwNR64s49BgBbG',
     keyboardPwdIdIn: 'fldnLAtjLbYo5AO8m', // labelled "RemoteLock guest ID (in)" — repurposed
