@@ -202,9 +202,18 @@ export const classifyAddress = (raw: string | null | undefined): LocationKind =>
   if (BSI_PATTERNS.some((p) => p.test(addr))) return 'bsi'
   if (KEF_PATTERNS.some((p) => p.test(addr))) return 'kef-airport'
   // 3-digit postcode in the address (Icelandic postcodes are 3 digits).
-  // Skip 4+ digit "numbers" so we don't accidentally read flight number
-  // FI615 as postcode 615 (which would then classify as outside-capital).
-  const pcMatch = /(?:^|[^\d])(\d{3})(?:[^\d]|$)/.exec(addr)
+  // Must be followed by whitespace + a letter (city name) so we don't
+  // misread:
+  //   - Plus Codes like "544P+F35" (Google Places autocomplete returns
+  //     these for some establishments). The "544" is part of the Plus
+  //     Code, not a postcode, and the "P" immediately follows with no
+  //     space.
+  //   - Flight numbers like "FI615" (no space after).
+  //   - Street numbers like "Hringbraut 100" followed by a comma (no
+  //     letter immediately after).
+  // Real Icelandic addresses have the postcode in the format
+  //   "XXX CityName" — e.g. "Pósthússtræti 11, 101 Reykjavík".
+  const pcMatch = /(?:^|[\s,])(\d{3})\s+[A-Za-zÁÉÍÓÚÝÞÆÖÐáéíóúýþæöð]/.exec(addr)
   if (pcMatch) {
     const byPc = classifyByPostcode(Number(pcMatch[1]))
     if (byPc) return byPc

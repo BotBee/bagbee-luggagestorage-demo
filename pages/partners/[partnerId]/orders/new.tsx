@@ -140,9 +140,18 @@ const inputStyles = `
 `
 
 const Input = styled.input`${inputStyles}`
+// Native arrow is hidden by appearance:none in inputStyles, so we paint
+// our own chevron via background-image. Padding-right makes room for it
+// so the selected option text doesn't overlap.
 const Select = styled.select`
   ${inputStyles}
-  background: white;
+  background-color: white;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23696f79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+  padding-right: 32px;
+  cursor: pointer;
 `
 const Textarea = styled.textarea`
   ${inputStyles}
@@ -701,7 +710,7 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
                   We'll quote {quoteLoading && '· updating…'}
                 </QuoteCaption>
                 <QuoteReason style={{ marginTop: 6 }}>
-                  {quote.reason} You can submit the booking anyway — Runar
+                  {quote.reason} You can submit the booking anyway — BagBee
                   will send a quote by email before confirming.
                 </QuoteReason>
               </QuoteCard>

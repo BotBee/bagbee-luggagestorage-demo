@@ -665,6 +665,43 @@ export const updatePartnerOrder = async (
   return getPartnerOrder(partnerId, recordId)
 }
 
+// Cancel an order by setting the Update Order multipleSelects field to
+// ['Cancel & Refund']. The Order Status formula reads that value and
+// resolves to "Cancelled". Same field/value the dispatcher uses from the
+// Airtable UI — keeps the cancellation indistinguishable from ops-side
+// cancellations downstream.
+//
+// We also append a changelog line to the comment so ops can see who
+// cancelled and when. Returns the refreshed order summary.
+export const cancelPartnerOrder = async (
+  partnerId: PartnerId,
+  recordId: string,
+  actor: string | undefined,
+): Promise<OrderSummary | null> => {
+  const table = getOrdersLookupTable()
+  // Scope guard: never let one partner cancel another's order.
+  const before = await getPartnerOrder(partnerId, recordId)
+  if (!before) return null
+
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+  const who = actor
+    ? `${PARTNERS[partnerId].displayName} (${actor})`
+    : PARTNERS[partnerId].displayName
+  const cancelNote = `\n— Cancelled by ${who} @ ${ts} via partner portal.`
+  const newComment = (before.comment || '') + cancelNote
+
+  // Two-step pattern (same as updatePartnerOrder): clear the trigger
+  // first so a downstream automation re-fires even if the field already
+  // had a value, then set the cancel flag + the comment in one update.
+  await table.update(recordId, { [FIELDS.updateTrigger]: [] })
+  await table.update(recordId, {
+    [FIELDS.updateTrigger]: ['Cancel & Refund'],
+    [FIELDS.comment]: newComment,
+  })
+
+  return getPartnerOrder(partnerId, recordId)
+}
+
 export type NewOrderInput = {
   customerName: string
   contactName?: string

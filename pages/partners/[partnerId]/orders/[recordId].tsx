@@ -294,6 +294,88 @@ const SaveButton = styled.button`
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 `
 
+// Cancel-order styling — destructive, but understated so it doesn't
+// dominate the form. Text + border, not a filled red block.
+const CancelButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  background: white;
+  color: #b3261e;
+  border: 1px solid #f1c0bb;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-right: auto;
+  &:hover:enabled { background: #fdecea; border-color: #b3261e; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`
+
+// Modal scrim + dialog for the cancel-confirm step. We render the same
+// 24h-invoice copy the partner-portal contract reflects, so there are no
+// surprise charges after the fact.
+const ModalScrim = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 9, 41, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 24px;
+`
+
+const ModalCard = styled.div`
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 460px;
+  width: 100%;
+  font-family: 'Poppins', sans-serif;
+`
+
+const ModalTitle = styled.h2`
+  font-size: 18px;
+  font-weight: 700;
+  color: #000929;
+  margin: 0 0 10px;
+`
+
+const ModalBody = styled.div`
+  font-size: 13px;
+  color: #2a313d;
+  line-height: 1.55;
+  margin-bottom: 18px;
+`
+
+const InvoiceNotice = styled.div<{ kind: 'free' | 'invoiced' }>`
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: ${({ kind }) => (kind === 'free' ? '#e7f6ec' : '#fdecea')};
+  color: ${({ kind }) => (kind === 'free' ? '#176c2c' : '#b3261e')};
+`
+
+const ModalActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+`
+
+const DestructiveButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  background: #b3261e;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover:enabled { background: #9a1f18; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`
+
 const ResetButton = styled.button`
   font-family: 'Poppins', sans-serif;
   font-size: 13px;
@@ -489,6 +571,64 @@ export default function PartnerOrderPage({
   // the comment changelog.
   const contactChanged = actor.trim() !== (original.contactName || '').trim()
   const hasAnyEdit = hasChanges || contactChanged
+
+  // ---- Cancel-order state + logic ----
+  //
+  // Cancel button is only meaningful for orders that haven't actually
+  // happened yet. Hide it for Delivered (trip done), Cancelled (already
+  // cancelled), In progress (driver mid-route, ops needs to handle).
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const cancellable =
+    original.status === 'Pending' ||
+    original.status === 'Confirmed' ||
+    original.status === 'Planned'
+  // Iceland Travel + Atlantik contract: cancellations >24h before the
+  // pickup date are free. Cancellations inside 24h are still allowed but
+  // the order is invoiced as if it ran. We compute against the start of
+  // the pickup day (UTC midnight) — partner staff don't enter exact
+  // pickup hours, so day-of cancellations always count as <24h.
+  const hoursToPickup = original.pickupDate
+    ? (Date.parse(original.pickupDate + 'T00:00:00Z') - Date.now()) / 3600_000
+    : null
+  const willBeInvoiced = hoursToPickup != null && hoursToPickup < 24
+
+  const onCancel = async () => {
+    if (cancelling) return
+    setCancelling(true)
+    setToast(null)
+    try {
+      const res = await fetch(
+        `/api/partners/${partnerId}/orders/${order.id}/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor: actor.trim() || undefined }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.message || 'Cancel failed')
+      }
+      const body = (await res.json()) as { order: OrderSummary }
+      setOriginal(body.order)
+      setForm(orderToForm(body.order))
+      setCancelOpen(false)
+      setToast({
+        kind: 'ok',
+        msg: willBeInvoiced
+          ? 'Order cancelled — within 24h of pickup, this booking will still be invoiced.'
+          : 'Order cancelled — no invoice will be issued.',
+      })
+    } catch (err) {
+      setToast({
+        kind: 'err',
+        msg: err instanceof Error ? err.message : 'Cancel failed',
+      })
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const onSave = async () => {
     if (!hasAnyEdit || saving) return
@@ -785,6 +925,15 @@ export default function PartnerOrderPage({
           </div>
 
           <ButtonBar>
+            {cancellable && (
+              <CancelButton
+                type="button"
+                onClick={() => setCancelOpen(true)}
+                disabled={saving || cancelling}
+              >
+                Cancel booking
+              </CancelButton>
+            )}
             <ResetButton onClick={onReset} disabled={!hasChanges || saving}>
               Reset
             </ResetButton>
@@ -799,6 +948,53 @@ export default function PartnerOrderPage({
           </ButtonBar>
           {toast && <Toast kind={toast.kind}>{toast.msg}</Toast>}
         </Card>
+
+        {/* Cancel-confirm modal. Renders only when cancelOpen is true so
+            it stays out of the DOM in the normal flow. Different copy
+            depending on whether we're inside the 24h invoice window. */}
+        {cancelOpen && (
+          <ModalScrim onClick={() => !cancelling && setCancelOpen(false)}>
+            <ModalCard onClick={(e) => e.stopPropagation()}>
+              <ModalTitle>Cancel this booking?</ModalTitle>
+              <ModalBody>
+                Order <strong>{original.reference || original.orderNoShort}</strong>
+                {original.pickupDate && (
+                  <> · pickup {fmtDate(original.pickupDate)}</>
+                )}
+                . This will mark the booking as <strong>Cancelled</strong> in
+                BagBee's system. Drivers will be notified and no bags will be
+                collected.
+                {willBeInvoiced ? (
+                  <InvoiceNotice kind="invoiced">
+                    <strong>Within 24h of pickup</strong> — per contract, this
+                    booking will still be invoiced.
+                  </InvoiceNotice>
+                ) : (
+                  <InvoiceNotice kind="free">
+                    More than 24h before pickup — <strong>no invoice</strong>{' '}
+                    will be issued for this cancellation.
+                  </InvoiceNotice>
+                )}
+              </ModalBody>
+              <ModalActions>
+                <ResetButton
+                  type="button"
+                  onClick={() => setCancelOpen(false)}
+                  disabled={cancelling}
+                >
+                  Keep booking
+                </ResetButton>
+                <DestructiveButton
+                  type="button"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? 'Cancelling…' : 'Yes, cancel'}
+                </DestructiveButton>
+              </ModalActions>
+            </ModalCard>
+          </ModalScrim>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {!isLiveTrackingStage(original.status) && (
