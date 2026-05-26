@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useRef, useState } from 'react'
 import PartnerLayout from '../../../../components/partners/PartnerLayout'
+import PartnerAddressInput from '../../../../components/partners/PartnerAddressInput'
 import { PARTNERS, PartnerId, isPartnerId, verifySession } from '../../../../utils/partnerAuth'
 import { OrderSummary } from '../../../../utils/partnerOrders'
 import { hasTentativePricing } from '../../../../utils/partnerPricing'
@@ -322,6 +323,10 @@ const initial: Form = {
   comment: '',
 }
 
+// Same env var the customer-booking flow uses. NEXT_PUBLIC_ → inlined at
+// build time so it's safe to read directly in client-rendered code.
+const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+
 export default function NewPartnerOrder({ partnerId, partnerDisplayName, sessionEmail }: Props) {
   const router = useRouter()
   // Seed the contact-email field with the verified session email so the
@@ -593,19 +598,21 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
             <Field>
               <div>
                 <Label>Pickup address / hotel *</Label>
-                <Input
+                <PartnerAddressInput
+                  apiKey={mapsApiKey}
                   required
-                  placeholder="Hilton Reykjavik Nordica"
+                  placeholder="Start typing a hotel or address"
                   value={form.pickupAddress}
-                  onChange={(e) => setField('pickupAddress', e.target.value)}
+                  onChange={(v) => setField('pickupAddress', v)}
                 />
               </div>
               <div>
                 <Label>Delivery destination</Label>
-                <Input
-                  placeholder="KEF / hotel / venue"
+                <PartnerAddressInput
+                  apiKey={mapsApiKey}
+                  placeholder="Hotel, venue, or street + city"
                   value={form.deliveryAddress}
-                  onChange={(e) => setField('deliveryAddress', e.target.value)}
+                  onChange={(v) => setField('deliveryAddress', v)}
                 />
               </div>
             </Field>
