@@ -48,6 +48,7 @@ interface SyncSummary {
   completed: number
   failed: number
   errors: { booking: string; error: string }[]
+  debug?: any[]
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -156,7 +157,8 @@ async function processBooking(
   const pickupShift = shiftForEvent(new Date(checkOutIso))
 
   // TEMP diagnostic — remove once integration is verified end-to-end.
-  console.log('[lockers/sync] processBooking', {
+  if (!summary.debug) summary.debug = []
+  summary.debug.push({
     bookingId: booking.id,
     customerName: fields[FLD.bookings.customerName],
     cancelled,
