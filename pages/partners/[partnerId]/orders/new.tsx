@@ -468,7 +468,13 @@ export default function NewPartnerOrder({ partnerId, partnerDisplayName, session
             ? quote.totalIsk
             : undefined,
         comment: form.comment.trim() || undefined,
-        language: 'is' as const,
+        // Partner-portal bookings get English-language customer
+        // communications across the board (Atlantik and IT both deal
+        // with international tourists, not Icelandic-speakers). Airtable
+        // automations read this Málstaðall value to pick the customer
+        // email template — keep it 'en' for every partner-submitted
+        // order.
+        language: 'en' as const,
       }
       const res = await fetch(`/api/partners/${partnerId}/orders`, {
         method: 'POST',
