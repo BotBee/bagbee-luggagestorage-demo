@@ -142,6 +142,15 @@ const BSI_PATTERNS = [
   /reykjav(í|i)k\s+bus\s+terminal/i,
   /umferðarmiðstöð/i,
   /vatnsmýrarvegur\s*\d/i,
+  // Numbered downtown tour-pickup bus stops ("Bus Stop 5",
+  // "Bus stop 12", etc.). Partners book this variant the same way as a
+  // BSÍ-terminal trip — the guest is being picked up at a tour-bus
+  // signpost in central Reykjavík and delivered to a hotel — so it
+  // belongs in the "BSI to Hotel" tier, not the more-expensive
+  // capital-area transfer. Google Places autocomplete resolves these
+  // signposts to real coordinates inside 101 Reykjavík, which would
+  // otherwise classify as plain capital-area.
+  /\bbus\s*stop\s*\d+\b/i,
 ]
 
 const KEF_PATTERNS = [
@@ -301,7 +310,7 @@ const SURCHARGES: { label: string; pct: number; matches: (h: number) => boolean 
   [
     {
       label: 'Night surcharge (23:00–08:00)',
-      pct: 1.0,
+      pct: 0.5,
       matches: (h) => h >= 23 || h < 8,
     },
     {
