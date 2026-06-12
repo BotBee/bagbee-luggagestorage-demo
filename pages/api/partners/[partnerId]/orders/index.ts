@@ -1,0 +1,195 @@
+import { NextApiRequest, NextApiResponse } from 'next'
+import { PARTNERS, isPartnerId, requirePartner } from '../../../../../utils/partnerAuth'
+import {
+  computeKpis,
+  createPartnerOrder,
+  listPartnerOrders,
+  NewOrderInput,
+} from '../../../../../utils/partnerOrders'
+import { sendNewOrderApprovalNotice } from '../../../../../utils/partnerNotifications'
+import { normalizePhone } from '../../../../../utils/phoneNormalize'
+import { normalizeTimeWindow } from '../../../../../utils/timeWindow'
+
+// nudge HMR
+
+
+const VALID_SERVICE_TYPES: NewOrderInput['serviceType'][] = [
+  'Check-in service',
+  'Arrival service',
+  'Pickup & Delivery',
+  'Pickup',
+  'Delivery',
+  'Pickup from KEF',
+  'Delivery from storage',
+  'BSI to Hotel Delivery',
+  'Task',
+]
+
+const isYmd = (s: unknown): s is string =>
+  typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+const validateNewOrder = (body: unknown): { ok: true; input: NewOrderInput } | { ok: false; reason: string } => {
+  if (!body || typeof body !== 'object') return { ok: false, reason: 'Body required' }
+  const b = body as Record<string, unknown>
+  const reference = typeof b.reference === 'string' ? b.reference.trim() : ''
+  const customerName = typeof b.customerName === 'string' ? b.customerName.trim() : ''
+  const email = typeof b.email === 'string' ? b.email.trim() : ''
+  const phone = typeof b.phone === 'string' ? b.phone.trim() : ''
+  const serviceType = b.serviceType
+  const flightDate = b.flightDate
+  const pickupDate = b.pickupDate
+  const timeWindow = typeof b.timeWindow === 'string' ? b.timeWindow.trim() : ''
+  const pickupAddress = typeof b.pickupAddress === 'string' ? b.pickupAddress.trim() : ''
+  let bagsRegular = typeof b.bagsRegular === 'number' ? b.bagsRegular : Number(b.bagsRegular)
+  const bagsOdd = typeof b.bagsOdd === 'number' ? b.bagsOdd : Number(b.bagsOdd)
+  // Pax may be the only thing the partner has at booking time (cruise
+  // turnarounds — they know the manifest count weeks before the bag
+  // count is final). If they submit only pax, derive bagsRegular as
+  // ceil(pax × 1.5) so the dispatcher sees a sensible bag count on the
+  // Airtable row from the moment it lands, and the route planner
+  // doesn't have to guess. Partners can still amend the bag count
+  // later via the order detail page.
+  const paxRaw = typeof b.pax === 'number' ? b.pax : Number(b.pax)
+  const paxValid = Number.isFinite(paxRaw) && paxRaw > 0 ? Math.floor(paxRaw) : 0
+  if ((!Number.isFinite(bagsRegular) || bagsRegular <= 0) && paxValid > 0) {
+    bagsRegular = Math.ceil(paxValid * 1.5)
+  }
+
+  if (!reference) return { ok: false, reason: 'Your reference number is required' }
+  if (!email || !email.includes('@')) return { ok: false, reason: 'Valid email required' }
+  if (!phone) return { ok: false, reason: 'Phone required' }
+  if (typeof serviceType !== 'string' || !VALID_SERVICE_TYPES.includes(serviceType as NewOrderInput['serviceType']))
+    return { ok: false, reason: 'Service type invalid' }
+  // The form sends `flightDate` = `pickupDate` as a back-compat shim now
+  // that we no longer collect flight-side info from partners. Both fields
+  // arrive populated with the same date so validation still runs.
+  if (!isYmd(pickupDate)) return { ok: false, reason: 'Date of service must be YYYY-MM-DD' }
+  if (!isYmd(flightDate)) return { ok: false, reason: 'Date of service must be YYYY-MM-DD' }
+  if (!timeWindow) return { ok: false, reason: 'Time window required' }
+  if (!pickupAddress) return { ok: false, reason: 'Pickup address required' }
+  if (!Number.isFinite(bagsRegular) || bagsRegular < 0)
+    return { ok: false, reason: 'Bags (regular) must be a non-negative number' }
+  if (!Number.isFinite(bagsOdd) || bagsOdd < 0)
+    return { ok: false, reason: 'Bags (odd-size) must be a non-negative number' }
+  // After the pax-fallback derivation above, bagsRegular is > 0
+  // whenever the booking has either an explicit bag count OR a pax
+  // count. The total-zero guard catches genuinely empty submissions.
+  if (bagsRegular + bagsOdd === 0)
+    return { ok: false, reason: 'Order must include at least 1 bag or 1 passenger' }
+
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const pd = new Date(`${pickupDate}T00:00:00Z`).getTime()
+  if (pd < today.getTime()) return { ok: false, reason: 'Date of service is in the past' }
+
+  return {
+    ok: true,
+    input: {
+      // The customer-name column on the order is fixed to the agency name
+      // (see createPartnerOrder); the partner staffer's "group name" entry
+      // becomes a comment annotation. If they didn't type a group name we
+      // fall back to "—" so the row still maps cleanly.
+      customerName: customerName || '—',
+      contactName: typeof b.contactName === 'string' ? b.contactName.trim() : undefined,
+      reference,
+      email,
+      // Always normalize to E.164 (+<cc><number>) before writing to
+      // Airtable so downstream SMS / dispatch flows get a stable format.
+      phone: normalizePhone(phone),
+      serviceType: serviceType as NewOrderInput['serviceType'],
+      flightDate,
+      pickupDate,
+      // Normalize time windows to "HH:MM - HH:MM" so the Push-to-OR
+      // delivery payload doesn't break on single-time entries (see
+      // utils/timeWindow.ts for the full story).
+      timeWindow: normalizeTimeWindow(timeWindow),
+      pickupAddress,
+      deliveryAddress:
+        typeof b.deliveryAddress === 'string' ? b.deliveryAddress.trim() || undefined : undefined,
+      // Optional — defaults server-side to pickupDate if omitted (most
+      // partner P&D bookings are same-day).
+      deliveryDate: isYmd(b.deliveryDate) ? b.deliveryDate : undefined,
+      deliveryTimeWindow:
+        typeof b.deliveryTimeWindow === 'string' && b.deliveryTimeWindow.trim()
+          ? normalizeTimeWindow(b.deliveryTimeWindow)
+          : undefined,
+      hotelName:
+        typeof b.hotelName === 'string' ? b.hotelName.trim() || undefined : undefined,
+      airline: typeof b.airline === 'string' ? b.airline.trim() || undefined : undefined,
+      flightNumber:
+        typeof b.flightNumber === 'string' ? b.flightNumber.trim() || undefined : undefined,
+      destinationCode:
+        typeof b.destinationCode === 'string'
+          ? b.destinationCode.trim() || undefined
+          : undefined,
+      bagsRegular,
+      bagsOdd,
+      // Pax is optional. Stored as a positive integer if provided; the
+      // pricing calculator uses it directly on pax-based tiers instead
+      // of falling back to ceil(bags / 1.5). Anything else → undefined
+      // so the field is left null in Airtable.
+      pax:
+        typeof b.pax === 'number' && b.pax > 0 ? Math.floor(b.pax) : undefined,
+      estimatedAmount:
+        typeof b.estimatedAmount === 'number' && b.estimatedAmount > 0
+          ? b.estimatedAmount
+          : undefined,
+      comment: typeof b.comment === 'string' ? b.comment.trim() || undefined : undefined,
+      language:
+        b.language === 'en' || b.language === 'is' ? (b.language as 'en' | 'is') : undefined,
+    },
+  }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const partnerSlug = req.query.partnerId
+  if (!isPartnerId(partnerSlug)) {
+    return res.status(404).json({ message: 'Unknown partner' })
+  }
+  const partnerId = partnerSlug
+  if (!requirePartner(req, res, partnerId)) return
+
+  if (req.method === 'GET') {
+    try {
+      const orders = await listPartnerOrders(partnerId)
+      const kpis = computeKpis(orders)
+      // Sort newest flight first for the list view.
+      orders.sort((a, b) => {
+        const at = a.flightDate ? Date.parse(a.flightDate) : 0
+        const bt = b.flightDate ? Date.parse(b.flightDate) : 0
+        return bt - at
+      })
+      return res.status(200).json({ orders, kpis })
+    } catch (err) {
+      console.error('[partner orders GET] failed', err)
+      return res.status(500).json({ message: 'Failed to load orders' })
+    }
+  }
+
+  if (req.method === 'POST') {
+    const validation = validateNewOrder(req.body)
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.reason })
+    }
+    try {
+      const created = await createPartnerOrder(partnerId, validation.input)
+      // IMPORTANT: await the notifier. On Vercel serverless the function is
+      // torn down the moment we return — fire-and-forget promises get
+      // killed mid-TLS-handshake and the email never actually sends. We
+      // accept the 1-2s extra latency in exchange for an email that
+      // reliably arrives. The notifier swallows its own errors, so a mail
+      // outage still doesn't fail the order create.
+      await sendNewOrderApprovalNotice(
+        partnerId,
+        PARTNERS[partnerId].displayName,
+        created,
+      )
+      return res.status(201).json({ order: created })
+    } catch (err) {
+      console.error('[partner orders POST] failed', err)
+      return res.status(500).json({ message: 'Failed to create order' })
+    }
+  }
+
+  return res.status(405).json({ message: 'Method not allowed' })
+}

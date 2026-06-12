@@ -1,0 +1,427 @@
+const common = {
+  backButtonText: 'Til baka',
+  menu: 'Valmynd',
+  openMenu: 'Opna valmynd',
+  closeMenu: 'Loka valmynd',
+}
+
+const footer = {
+  linksHeading: 'Hlekkir',
+  contactHeading: 'Tengjumst',
+  addressHeading: 'Heimilisfang',
+  addressLine1: 'BSÍ umferðarmiðstöð',
+  addressCountry: '',
+  tagline: 'Innritaðu töskurnar að heiman.',
+  copyright: 'Allur réttur áskilinn',
+  privacyPolicy: 'Persónuverndarstefna',
+  termsAndConditions: 'Skilmálar',
+}
+
+const contactInfoStep = {
+  title: 'Nú þurfum við að fá upplýsingar um þig',
+  subtitle: 'Ef ske kynni að við þurfum að ná í þig',
+  fullNameLabel: 'Fullt nafn',
+  fullNamePlaceholder: 'Sláðu inn fullt nafn',
+  emailLabel: 'Netfang',
+  emailPlaceholder: 'Sláðu inn netfangið þitt',
+  phoneNumberLabel: 'Símanúmer',
+  companyButton: 'Bóka fyrir fyrirtæki?',
+  companyOffButton: 'Ég er að bóka sem einstaklingur',
+  companyIdLabel: 'Kennitala fyrirtækis',
+  companyIdPlaceholder: 'Kennitala',
+  passengersTitle: 'Farþegaupplýsingar',
+  passengersSubTitle: 'ATH. mikilvægt er a skrá nöfn eins og i flugbókun',
+  passengerTitle: 'Farþegi',
+  passengerFirstNameLabel: 'Eiginnafn (millinafn skráist með eiginnafni)',
+  passengerFirstNamePlaceholder: 'Sláðu inn eiginnafn',
+  passengerLastNameLabel: 'Eftirnafn',
+  passengerLastNamePlaceholder: 'Sláðu inn eftirnafn',
+  addPassengerButton: 'Bæta við farþega',
+  removePassengerButton: 'Fjarlægja',
+  termsCheckbox: {
+    partOne: 'Ég samþykki',
+    partTwo: 'skilmála Bagbee',
+  },
+  submitButtonText: 'Næsta skref',
+}
+
+const departureDateStep = {
+  title: 'Byrjum á að velja dagsetningu brottfarar',
+  subtitle: 'Veldu dagsetninguna sem þú flýgur út',
+  confirmTitle: 'Dagsetning brottfarar',
+}
+
+const airlineStep = {
+  title: 'Með hvaða flugfélagi flýgur þú?',
+  subtitle: 'Veldu flugfélagið sem þú flýgur með',
+  otherAirline: 'Annað flugfélag',
+}
+
+const airportStep = {
+  title: 'Hvert ertu að fara?',
+  subtitle: 'Veldu flugvöllinn sem þú lendir á',
+  arrivalAirport: 'Áfangastaður',
+  searchPlaceholder: 'Leita að flugvelli eða borg..',
+  infoContainerText:
+    'Fyrir tengiflug, vinsamlegast veljið fyrsta flugvöll sem flogið er til frá Keflavíkurflugvelli. Taskan verður þó innrituð skv. farþegabókun og skilar sér á áfangastað. ATH: Ekki er hægt að innrita farangur á flugi til Kanada enn sem komið er.',
+}
+
+const selectFlightStep = {
+  title: 'Við höfum fundið flug sem passa!',
+  subtitle: 'Veldu flugið þitt í listanum fyrir neðan',
+  flightNumberText: 'Flugnúmer',
+}
+
+const bagSelectionStep = {
+  title: 'Farangur',
+  subtitle: 'Veldu fjölda af töskum og öðrum farangri hér fyrir neðan',
+  luggageText: 'Töskur',
+  oddSizeText: 'Töskur í umframstærð (odd-size) - T.d. golfsett, skíði, barnavagnar og hjólatöskur',
+  priceText: 'Verð',
+  totalBags: 'Töskufjöldi samtals:',
+  submitButton: 'Næsta skref',
+}
+
+const pickUpStep = {
+  title: 'Staður og tími',
+  subtitle: 'Veldu tímaramma og heimilisfang',
+  addressLabel: 'Heimilisfang eða hótel þar sem farangurinn verður sóttur',
+  residentialTab: 'Heimilisfang',
+  hotelLocationInputLabel: 'Á hvaða hóteli viltu að við sækjum töskurnar þínar?',
+  residentialLocationInputLabel: 'Hvert viltu að við sækjum farangurinn á höfuðborgarsvæðinu?',
+  pickUpTimeLabel: 'Veldu tímaramma sem hentar til að láta sækja farangurinn',
+  morningPickUpGroupLabel: 'Morguntímarammar',
+  eveningPickUpGroupLabel: 'Kvöldtímarammar',
+  dayOfDeparture: 'Brottfaradagur',
+  dayBeforeDeparture: 'Daginn fyrir brottför',
+  pickUpInfoBox:
+    'Daginn sem farangurinn er sóttur, færðu skilaboð með nákvæmari tímasetningu á því hvenær bílstjórinn mætir',
+  ecoInfo: 'Minni akstur og vistvænni kostur',
+  commentLabel:
+    'Skilaboð til bílstjóra. T.d. númer íbúðar, hæð, bjalla, upplýsingar um aðkomu eða annað.',
+  submitButton: 'Næsta skref',
+  fullyBooked: 'Uppbókað',
+  loadingAvailableTimes: 'Sæki lausa tímaramma...',
+  errorLoadingAvailableTimes: 'Villa við að sækja lausa tímaramma',
+}
+
+const confirmOrderStep = {
+  title: 'Staðfesta pöntun',
+  subtitle: 'Vertu viss um að upplýsingarnar séu rétt slegnar inn',
+  personalInformationTitle: 'Persónuupplýsingar',
+  flightDetailsTitle: 'Flugupplýsingar',
+  pickUpInfoTitle: 'Farangursupplýsingar',
+  passengersInfoTitle: 'Farþegaupplýsingar',
+  passengerInfoTitle: 'Farþegi',
+  totalPriceText: 'Verð',
+  submitButton: 'Greiða núna',
+  pickUpItems: {
+    location: 'Staðsetning',
+    time: 'Tímarammi',
+    date: 'Dagsetning',
+  },
+  discount: {
+    iHaveDiscountCode: 'Ertu með afsláttarkóða?',
+    iDontHaveDiscountCode: 'Ég er ekki með afsláttarkóða',
+    discountCode: 'Afsláttarkóði',
+    inputPlaceholder: 'Sláðu inn afsláttarkóða',
+    apply: 'Virkja afsláttarkóða',
+    discountCodeInvalid: 'Afsláttarkóði ógildur',
+    errorValidatingDiscountCode: 'Villa við að sækja afsláttarkóða',
+    discountCodeSuccessfullyAdded: 'Afsláttarkóði virkjaður. Afsláttur: ',
+  },
+}
+
+const successStep = {
+  // incomplete
+  title: 'Pöntun fór í gegn!',
+  bookingNumber: 'Bókunarnúmer',
+  message:
+    'Takk fyrir að panta hjá Bagbee! Við munum senda þér skilaboð þegar nær dregur, ef þú hefur einhverjar spurningar um þjónustu okkar getur þú alltaf haft samband í síma, í gegnum tölvupóst eða á spjallinu',
+}
+
+const cancelStep = {
+  title: 'Greiðsla mistókst',
+  message:
+    'Eitthvað fór úrskeiðis við greiðsluna. Þú getur reynt aftur með pöntunina þína eða farið aftur á forsíðu og byrjað upp á nýtt.',
+  retryButton: 'Reyna greiðslu aftur',
+  backToBookingButton: 'Til baka að bókun',
+  startOverButton: 'Byrja nýja bókun',
+  retryError: 'Ekki tókst að ræsa greiðslu. Reyndu aftur eða hafðu samband við BagBee.',
+  alreadyPaidNotice: 'Þessi pöntun hefur þegar verið greidd.',
+}
+
+const loadingScreen = {
+  loadingFlightsText: 'Fetching flights',
+  loadingOrderCompleteText: 'erum að klára pöntunina þína..',
+}
+
+const priceCalculator = {
+  title: 'Töskufjöldi',
+  landingPageCheckInButtonText: 'Bóka',
+}
+// error screen
+
+const aboutPage = {
+  contact: 'Hafa samband',
+}
+
+const giftcardPage = {
+  title: 'Gjafabréf með Bagbee',
+  paragraph1:
+    'Gjafabréf hjá BagBee er tilvalin gjöf fyrir ferðalanga sem kunna að meta þægindin sem því fylgir að innrita farangurinn með BagBee og sleppa þannig við töskuburðinn og innritunarröðina',
+  buttonText: 'Kaupa gjafabréf',
+}
+
+const orderTrackingPage = {
+  // Page title
+  orderLabel: 'Pöntun',
+
+  // Service types
+  departureService: 'Innritunarþjónusta',
+  arrivalService: 'Komuþjónusta',
+  pickupDeliveryService: 'Töskuflutningur',
+
+  // Status names
+  status: {
+    Pending: 'Í bið',
+    Confirmed: 'Staðfest',
+    Planned: 'Skipulagt',
+    'In Progress': 'Í gangi',
+    Delivered: 'Afhent',
+  },
+
+  // 404 page
+  notFoundTitle: '404',
+  notFoundText:
+    'Pöntun #{orderNo} fannst ekki. Vinsamlegast athugaðu pöntunarnúmerið og reyndu aftur.',
+
+  // Sections
+  orderDetailsTitle: 'Pöntunarupplýsingar',
+  clientInfoTitle: 'Upplýsingar viðskiptavinar',
+  pickupInfoTitle: 'Sækjum',
+  deliveryInfoTitle: 'Afhendum',
+  estimatedPickupTitle: 'Áætluð tímasetning',
+  pickupLocationTitle: 'Heimilisfang',
+  deliveryLocationTitle: 'Afhendingarstaður',
+  yourBagsTitle: 'Töskurnar þínar',
+
+  // Detail labels
+  service: 'Þjónusta',
+  flight: 'Flug',
+  flightDate: 'Dagsetning flugs',
+  pickupDate: 'Dagsetning pick-up',
+  airline: 'Flugfélag',
+  bags: 'Töskur',
+  pickupWindow: 'Tímasetning',
+  deliveryWindow: 'Afhendingartími',
+  deliveryDate: 'Dagsetning afhendingar',
+  customer: 'Viðskiptavinur',
+  phone: 'Sími',
+  email: 'Tölvupóstur',
+  address: 'Heimilisfang',
+  pickupAddress: 'Heimilisfang',
+  deliveryAddress: 'Afhendingarstaður',
+  addressLabel: 'Heimilisfang',
+  standardSuffix: 'venjulegar',
+  oddSizeSuffix: 'yfirstærð',
+  totalSuffix: 'samtals',
+
+  // Estimated pickup card
+  pickupBetween: 'Töskurnar þínar verða sóttar á tímabilinu',
+  pickupEstimateNote: 'Þetta er áætlun (\u00b110 mínútur)',
+
+  // Bag photos
+  noBagPhotos: 'Engar töskumyndir tiltækar enn sem komið er.',
+
+  // Edit section
+  editOrder: 'Breyta pöntun',
+  editOrderDescription: 'Breyttu tímasetningu, heimilisfangi eða fjölda taska.',
+  updateYourOrder: 'Uppfæra pöntun',
+  standardBags: 'Venjulegar töskur',
+  oddSizeBags: 'Töskur í yfirstærð',
+  selectPickupTimeWindow: 'Veldu tímasetningu:',
+  morningLabel: 'Morgun (09:00 - 12:00)',
+  eveningLabel: 'Kvöld (17:00 - 22:00)',
+  selected: 'Valið',
+
+  // Surcharge
+  surcharge: 'Aukagjald:',
+  extraBag: 'aukatöskur',
+  extraBags: 'aukatöskur',
+  extraOddSize: 'aukatöskur í yfirstærð',
+
+  // Buttons
+  saveChanges: 'Vista breytingar',
+  processing: 'Vinnur...',
+  payAndUpdate: 'Greiða {amount} kr og uppfæra',
+  freeTimeWindow: 'Breyting á tímasetningu er ókeypis.',
+
+  // Messages
+  changesSaved: 'Breytingarnar þínar hafa verið vistaðar. Þú færð uppfærða staðfestingu.',
+  changesSaveFailed:
+    'Ekki tókst að vista breytingarnar. Reyndu aftur eða hafðu samband við BagBee.',
+  paymentSuccess: 'Greiðsla tókst! Pöntunin þín hefur verið staðfest.',
+  paymentError: 'Greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+
+  // Fast-Track
+  fastTrackTitle: 'Fast-Track á flugið þitt',
+  fastTrackDescription:
+    'Slepptu biðröðinni við öryggisleit. 2.490 kr á farþega.',
+  fastTrackOpenButton: 'Panta Fast-Track',
+  fastTrackSectionTitle: 'Bæta við Fast-Track',
+  fastTrackPassenger: 'Farþegi',
+  fastTrackMainPassenger: 'Aðalfarþegi',
+  fastTrackFirstName: 'Fornafn',
+  fastTrackLastName: 'Eftirnafn',
+  fastTrackAddPassenger: '+ Bæta við farþega',
+  fastTrackRemovePassenger: 'Fjarlægja',
+  fastTrackTotal: 'Samtals',
+  fastTrackPay: 'Greiða {amount} kr',
+  fastTrackProcessing: 'Vinnur...',
+  fastTrackCancel: 'Hætta við',
+  fastTrackSuccess:
+    'Fast-Track kaupin tókust! Þú munt fá staðfestingarpóst fljótlega.',
+  fastTrackError:
+    'Fast-Track greiðsla mistókst. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+  fastTrackMaxPassengers: 'Hámark 4 farþegar á hverja Fast-Track pöntun.',
+  fastTrackActiveTitle: 'Fast-Track er virkt',
+  fastTrackActiveDescription:
+    'Slepptu biðröðinni við öryggisleit á flugdaginn. Sýndu staðfestingarpóstinn við Fast-Track hliðið.',
+  fastTrackValidThrough: 'Gildir til {date}',
+  fastTrackExpiredTitle: 'Fast-Track útrunnið',
+  fastTrackExpiredDescription:
+    'Fast-Track þitt gilti til {date} og er ekki lengur virkt.',
+  fastTrackPassengersLabel: 'Farþegar',
+  fastTrackAddMore: '+ Bæta við farþega',
+
+  // Cruise day-storage add-on
+  dayStorageTitle: 'Geymdu handfarangurinn yfir daginn',
+  dayStorageDescription:
+    'Viltu að við sjáum líka um handfarangurinn? Réttu bílstjóranum hann á bryggjunni og sæktu hann síðar á BSÍ Flybus stöðinni. Frá 1.500 kr á hlut.',
+  dayStorageOpenButton: 'Bæta við dagsgeymslu',
+  dayStorageSectionTitle: 'Hvað margar töskur?',
+  dayStorageLuggageLabel: 'Farangur',
+  dayStorageLuggageHint: 'Ferðatöskur, íþróttatöskur — 2.000 kr hver',
+  dayStorageBackpackLabel: 'Bakpokar / veski',
+  dayStorageBackpackHint: '≤ 50 cm með ólum — 1.500 kr hver',
+  dayStorageSlotLabel: 'Hvenær sækir þú á BSÍ?',
+  dayStorageTotalLabel: 'Samtals',
+  dayStoragePay: 'Greiða {amount} kr',
+  dayStorageProcessing: 'Vinn úr...',
+  dayStorageCancel: 'Hætta við',
+  dayStorageSuccess:
+    'Dagsgeymsla bókuð! BagBee bílstjóri sækir handfarangurinn á bryggjunni. Sæktu hann á BSÍ afgreiðslunni — eða, ef þú valdir eftir 17:00, færðu PIN í tölvupósti fyrir geymsluhólf.',
+  dayStorageError:
+    'Greiðsla fyrir dagsgeymslu mistókst. Reyndu aftur eða hafðu samband við BagBee.',
+
+  // Add bags (Planned + In Progress)
+  addBagsTitle: 'Þarftu að bæta við tösku?',
+  addBagsDescription:
+    'Hægt er að bæta við töskum allt fram að því að bílstjórinn skilar farangrinum.',
+  addBagsOpenButton: 'Bæta við töskum',
+  addBagsSectionTitle: 'Bæta töskum við pöntunina',
+  addBagsCurrentBags:
+    'Þú ert með {regular} venjulegar töskur og {oddsize} sérstærðar á þessari pöntun.',
+  addBagsRegularLabel: 'Aukatöskur (1.990 kr/stk)',
+  addBagsOddSizeLabel: 'Aukatöskur í sérstærð (2.490 kr/stk)',
+  addBagsTotal: 'Samtals',
+  addBagsPay: 'Greiða {amount} kr',
+  addBagsCancel: 'Hætta við',
+  addBagsError:
+    'Ekki tókst að ræsa greiðsluna. Reyndu aftur eða hafðu samband við BagBee.',
+
+  // Cancel order
+  cancelOrder: {
+    linkText: 'Hætta við pöntun',
+    confirmTitle: 'Hætta við þessa pöntun?',
+    confirmBody: (amount: string) =>
+      `Þú færð fulla endurgreiðslu upp á ${amount} kr. á sömu greiðslukort. Það getur tekið nokkrar mínútur að birtast. Ekki er hægt að afturkalla þessa aðgerð.`,
+    confirmBodyNoRefund:
+      'Þú getur enn hætt við pöntunina, en á þessum tímapunkti er ekki hægt að endurgreiða. Ekki er hægt að afturkalla þessa aðgerð.',
+    confirmButton: 'Já, hætta við og endurgreiða',
+    confirmButtonNoRefund: 'Já, hætta við án endurgreiðslu',
+    keepButton: 'Halda pöntun',
+    cancelling: 'Hætti við…',
+    doneTitle: 'Pöntun hætt við',
+    successRefunded:
+      'Pöntuninni þinni hefur verið hætt við og upphæðin endurgreidd að fullu. Það gæti tekið nokkra virka daga að birtast á yfirlitinu þínu.',
+    successPartial:
+      'Pöntuninni var hætt við, en ekki tókst að endurgreiða að fullu sjálfkrafa. BagBee hefur samband til að ljúka endurgreiðslu.',
+    successNoPayments:
+      'Pöntuninni hefur verið hætt við. Engin greiðsla var skráð, svo engin endurgreiðsla þarf að fara fram.',
+    successNoRefund:
+      'Pöntuninni hefur verið hætt við. Engin endurgreiðsla fer fram þar sem hætt var við innan 24 klukkustunda fyrir þjónustu.',
+    error:
+      'Ekki tókst að hætta við pöntun. Vinsamlegast reyndu aftur eða hafðu samband við BagBee.',
+    tooLate:
+      'Eingöngu er hægt að hætta við á netinu allt að 24 klukkustundum fyrir þjónustu. Vinsamlegast hafðu samband við BagBee.',
+    noRefund:
+      'Þú getur enn hætt við pöntunina, en á þessum tímapunkti er ekki hægt að endurgreiða.',
+    close: 'Loka',
+  },
+
+  // P&D edit form
+  editPickupSection: 'Sótt',
+  editDeliverySection: 'Afhending',
+  pickupAddressLabel: 'Heimilisfang',
+  deliveryAddressLabel: 'Afhendingarstaður',
+  pickupDateLabel: 'Dagsetning þjónustu',
+  deliveryDateLabel: 'Dagsetning afhendingar',
+  pickupTimeWindowLabel: 'Tímasetning',
+  deliveryTimeWindowLabel: 'Afhendingartími',
+  timeWindowPlaceholder: 't.d. 09:00 - 11:00',
+
+  // Tip (English-only feature, but keys mirrored here so TS type is consistent)
+  tipTitle: '',
+  tipSubtext: '',
+  tipPresetLabel: '',
+  tipCustomLabel: '',
+  tipSubmit: '',
+  tipSubmitGeneric: '',
+  tipProcessing: '',
+  tipSuccess: '',
+  tipError: '',
+
+  // Charter-flight passenger collection (FI1XXX flights only).
+  // Replaces the legacy email→Fillout-form flow.
+  charterTitle: 'Leiguflug — vinsamlegast skráðu farþegana',
+  charterIntro:
+    'Flug {flightNumber} með Icelandair er leiguflug. Við þurfum að vita nöfn allra farþega sem munu innrita farangur með BagBee til að geta innritað þá. Brottfararspjöldin verða send með tölvupósti úr kerfi Icelandair.',
+  charterBaggageNote:
+    'Farangursheimild á leiguflugum er venjulega 1 taska á mann. Á sumum leiguflugum, helst í golf- og skíðaferðum, er heimildin tvær töskur á mann — þá innritum við aðra töskuna á flugvellinum og sendum þér mynd af farangursmiðanum.',
+  charterPassengerLabel: 'Farþegi {n} — fullt nafn',
+  charterMainPassenger: 'Aðalfarþegi',
+  charterAddPassenger: '+ Bæta við farþega',
+  charterRemovePassenger: 'Fjarlægja',
+  charterSubmit: 'Skrá farþega',
+  charterSubmitting: 'Skrái...',
+  charterSuccessTitle: 'Takk fyrir!',
+  charterSuccessText:
+    'Við höfum móttekið farþegalistann og sjáum um innritunina. Þið fáið brottfararspjöldin í tölvupósti.',
+  charterError:
+    'Ekki tókst að senda farþegalistann. Reyndu aftur eða hafðu samband við okkur.',
+}
+
+const is = {
+  common,
+  footer,
+  contactInfoStep,
+  departureDateStep,
+  airlineStep,
+  airportStep,
+  selectFlightStep,
+  bagSelectionStep,
+  pickUpStep,
+  confirmOrderStep,
+  successStep,
+  cancelStep,
+  loadingScreen,
+  priceCalculator,
+  aboutPage,
+  giftcardPage,
+  orderTrackingPage,
+}
+
+// eslint-disable-next-line import/no-anonymous-default-export
+export default is

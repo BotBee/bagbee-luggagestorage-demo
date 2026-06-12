@@ -1,0 +1,188 @@
+import { NextApiRequest, NextApiResponse } from 'next'
+import {
+  getPickupConfig,
+  getPickupConfigMatrix,
+  getPickupTimes,
+  getPostalCodeCutoffs,
+  parseSlotStartHour,
+} from '../../../utils/airtable'
+import { isMorningPickupPastBookingCutoff } from '../../../utils/morningPickupCutoff'
+import { isCruisePortAddress } from '../../../common/transportConstants'
+import dayjs from 'dayjs'
+import mapValues from 'lodash/mapValues'
+import countBy from 'lodash/countBy'
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    // Only allow POST requests
+    if (req.method !== 'POST') {
+      console.warn('[api][availability] method not allowed', req.method)
+      return res.status(405).json({ error: 'Method not allowed' })
+    }
+
+    let departureDate: string = ''
+    let postalCode: string = ''
+    let pickupAddress: string = ''
+    try {
+      const body = JSON.parse(req.body)
+      departureDate = body?.departureDate
+      // postalCode is optional — empty/unknown → no postcode rule applied,
+      // capacity-only check (today's behaviour). Server validates on submit.
+      const rawPostal = body?.postalCode
+      postalCode = typeof rawPostal === 'string' ? rawPostal.trim() : ''
+      // pickupAddress is optional — used only to detect cruise-harbour pickups,
+      // which are exempt from the per-slot capacity cap (all collected at one
+      // spot, so a busy slot shouldn't block another harbour booking).
+      const rawAddr = body?.pickupAddress
+      pickupAddress = typeof rawAddr === 'string' ? rawAddr.trim() : ''
+    } catch (error) {
+      console.error('[api][availability] invalid body', req.body)
+      return res.status(400).json({ error: 'Invalid body' })
+    }
+
+    // Is THIS booking a cruise-harbour pickup? If so, capacity never blocks it.
+    const isHarbourPickup = isCruisePortAddress(pickupAddress)
+
+    // validte the departure date
+    if (!departureDate || !dayjs(departureDate).isValid()) {
+      console.warn('[api][availability] invalid departure date', departureDate)
+      return res.status(400).json({ error: 'Invalid departure date' })
+    }
+
+    const defaultTimeslotMax = await getPickupConfig()
+
+    const pickupConfigMatrix = await getPickupConfigMatrix(defaultTimeslotMax)
+
+    // same day pickup is allowed if the departure is in the evening
+    const allowSameDayPickup = dayjs(departureDate).get('hour') > 14
+    const currentTime = dayjs()
+
+    const morningDate = allowSameDayPickup
+      ? dayjs(departureDate)
+      : dayjs(departureDate).subtract(1, 'day')
+    const eveningDate = dayjs(departureDate).subtract(1, 'day')
+    const morningDateKey = `${morningDate.format('YYYY-MM-DD')}`
+    const eveningDateKey = `${eveningDate.format('YYYY-MM-DD')}`
+
+    const morningSlots: Record<string, boolean> = {
+      [`${morningDateKey}/09:00 - 12:00`]: false,
+      [`${morningDateKey}/08:00 - 09:00`]: false,
+      [`${morningDateKey}/09:00 - 10:00`]: false,
+      [`${morningDateKey}/10:00 - 11:00`]: false,
+      [`${morningDateKey}/11:00 - 12:00`]: false,
+    }
+    const eveningSlots: Record<string, boolean> = {
+      [`${eveningDateKey}/19:00 - 22:00`]: false,
+      [`${eveningDateKey}/17:00 - 18:00`]: false,
+      [`${eveningDateKey}/18:00 - 19:00`]: false,
+      [`${eveningDateKey}/19:00 - 20:00`]: false,
+      [`${eveningDateKey}/20:00 - 21:00`]: false,
+      [`${eveningDateKey}/21:00 - 22:00`]: false,
+    }
+
+    const pickupTimes = await getPickupTimes()
+
+    // Cruise-harbour pickups don't consume regular route capacity — they're all
+    // collected at the same pier in one quick stop. Exclude them from the
+    // per-slot count so they never push a slot to "full" for other customers.
+    const pickupTimesByDate = countBy(
+      pickupTimes.filter((pickupTime) => {
+        const addr = `${pickupTime.fields['Heimilisfang'] ?? ''} ${
+          pickupTime.fields['Short Address'] ?? ''
+        }`
+        return !isCruisePortAddress(addr)
+      }),
+      (pickupTime) =>
+        `${pickupTime.fields['Dagsetning pick-up']}/${pickupTime.fields['Tímasetning']}`,
+    )
+
+    // Postal-code rule lookup. Empty string / unknown postcode → no rule
+    // applies (legacy behaviour: capacity-only check). Earliest/latest are
+    // tracked separately for evening and morning routes — drivers run two
+    // different routes with different reachability windows per postcode.
+    const postalCodeRules = await getPostalCodeCutoffs()
+    const postalRule = postalCode ? postalCodeRules[postalCode] : undefined
+    const isUnserviced = postalRule ? postalRule.service === false : false
+    const earliestStartHour = postalRule ? postalRule.earliestSlotStartHour : null
+    const latestStartHour = postalRule ? postalRule.latestSlotStartHour : null
+    const earliestMorningStartHour = postalRule
+      ? postalRule.earliestMorningSlotStartHour
+      : null
+    const latestMorningStartHour = postalRule
+      ? postalRule.latestMorningSlotStartHour
+      : null
+
+    // "Any-time" slots are exempt from earliest/latest cutoffs — they cover
+    // the full window so the driver can swing by whenever they're in the
+    // area. 19:00-22:00 covers the full evening window; 09:00-12:00 covers
+    // the full morning window. Same convention as the "also 19:00-22:00"
+    // column in the postcode rules table.
+    const ANY_TIME_EVENING_SLOT = '19:00 - 22:00'
+    const ANY_TIME_MORNING_SLOT = '09:00 - 12:00'
+
+    const eveningSlotPassesPostalRule = (slotKey: string): boolean => {
+      if (isUnserviced) return false
+      const slotLabel = slotKey.split('/')[1] ?? ''
+      if (slotLabel === ANY_TIME_EVENING_SLOT) return true
+      const slotStartHour = parseSlotStartHour(slotLabel)
+      if (slotStartHour == null) return true
+      if (earliestStartHour != null && slotStartHour < earliestStartHour) return false
+      if (latestStartHour != null && slotStartHour > latestStartHour) return false
+      return true
+    }
+
+    const morningSlotPassesPostalRule = (slotKey: string): boolean => {
+      if (isUnserviced) return false
+      const slotLabel = slotKey.split('/')[1] ?? ''
+      if (slotLabel === ANY_TIME_MORNING_SLOT) return true
+      const slotStartHour = parseSlotStartHour(slotLabel)
+      if (slotStartHour == null) return true
+      if (
+        earliestMorningStartHour != null &&
+        slotStartHour < earliestMorningStartHour
+      ) {
+        return false
+      }
+      if (
+        latestMorningStartHour != null &&
+        slotStartHour > latestMorningStartHour
+      ) {
+        return false
+      }
+      return true
+    }
+
+    // check if the number of pickups for a given timeslot is less than the max
+    const timeslots = {
+      morningSlots: mapValues(morningSlots, (_, key) => {
+        const maxPickups = pickupConfigMatrix[key] || defaultTimeslotMax
+        if (maxPickups <= 0) return false
+        const slotDate = dayjs(key.split('/')[0])
+        // If it's same day, don't allow morning slots
+        if (slotDate.isSame(currentTime, 'day')) return false
+        if (isMorningPickupPastBookingCutoff(slotDate)) return false
+        // Apply postcode-based earliest/latest morning cutoffs (same logic
+        // as evening, gated by morning-specific Airtable columns). If the
+        // postcode is unserviced, the rule helper already returns false.
+        if (!morningSlotPassesPostalRule(key)) return false
+        // Harbour pickups are exempt from the capacity cap (same-spot, quick).
+        if (isHarbourPickup) return true
+        return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
+      }),
+      eveningSlots: mapValues(eveningSlots, (_, key) => {
+        const maxPickups = pickupConfigMatrix[key] || defaultTimeslotMax
+        if (maxPickups <= 0) return false
+        if (!eveningSlotPassesPostalRule(key)) return false
+        // Harbour pickups are exempt from the capacity cap (same-spot, quick).
+        if (isHarbourPickup) return true
+        return !pickupTimesByDate[key] || pickupTimesByDate[key] < maxPickups
+      }),
+    }
+
+    console.log('[api][availability] success')
+    res.status(200).json({ timeslots, pickupTimesByDate })
+  } catch (error) {
+    console.error('[api][availability] error', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}

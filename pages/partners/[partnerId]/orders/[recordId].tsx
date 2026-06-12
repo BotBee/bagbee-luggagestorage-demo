@@ -1,0 +1,1241 @@
+import styled from '@emotion/styled'
+import { GetServerSideProps } from 'next'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import PartnerLayout from '../../../../components/partners/PartnerLayout'
+import OrderTrackingMap from '../../../../components/partners/OrderTrackingMap'
+import DriverMessageBar from '../../../../components/partners/DriverMessageBar'
+import PartnerPhoneInput from '../../../../components/partners/PartnerPhoneInput'
+import { serviceTypeLabel } from '../../../../utils/partnerServiceLabel'
+import { PARTNERS, PartnerId, isPartnerId, verifyPartner } from '../../../../utils/partnerAuth'
+import {
+  EditableField,
+  getPartnerOrder,
+  OrderSummary,
+  stripPartnerChangelog,
+} from '../../../../utils/partnerOrders'
+import {
+  computeOrderPrice,
+  formatIsk,
+  hasTentativePricing,
+  PriceQuote,
+  PricelistCustomer,
+} from '../../../../utils/partnerPricing'
+
+// Same map as in /api/.../quote.ts — keeps the URL slug → pricelist Customer
+// translation in one place per file rather than crossing module boundaries
+// just for two entries.
+const PRICELIST_CUSTOMER: Record<PartnerId, PricelistCustomer> = {
+  'iceland-travel': 'Iceland Travel',
+  atlantik: 'Atlantik',
+}
+
+type Props = {
+  partnerId: PartnerId
+  partnerDisplayName: string
+  order: OrderSummary
+  // Pre-computed quote for this order's current state. Re-runs client-side
+  // when the partner edits an input that affects pricing (service, bags,
+  // time window) so the trip summary stays in sync as they tweak.
+  initialQuote: PriceQuote
+}
+
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const partnerSlug = ctx.params?.partnerId
+  if (!isPartnerId(partnerSlug)) return { notFound: true }
+  const partnerId = partnerSlug
+  if (verifyPartner(ctx.req) !== partnerId) {
+    return {
+      redirect: { destination: `/partners/${partnerId}/login`, permanent: false },
+    }
+  }
+  const recordId = ctx.params?.recordId
+  if (typeof recordId !== 'string') return { notFound: true }
+  const order = await getPartnerOrder(partnerId, recordId)
+  if (!order) return { notFound: true }
+  // Compute the live quote at SSR so the Trip Summary card renders the
+  // priced breakdown on first paint. Out-of-pricelist orders get a
+  // "manual quote" message instead. Pricing failures must not block the
+  // page — fall back to a neutral out-of-pricelist value if Airtable
+  // is down.
+  const initialQuote: PriceQuote = await computeOrderPrice({
+    customer: PRICELIST_CUSTOMER[partnerId],
+    serviceType: order.serviceType,
+    bagsRegular: order.bagsRegular,
+    bagsOdd: order.bagsOdd,
+    pax: order.pax,
+    timeWindow: order.timeWindow,
+    deliveryTimeWindow: order.deliveryTimeWindow,
+    pickupAddress: order.pickupAddress,
+    deliveryAddress: order.deliveryAddress,
+  }).catch(
+    (err): PriceQuote => {
+      console.error('[order detail SSR] price calc failed', err)
+      return {
+        kind: 'out-of-pricelist',
+        reason: 'Price calculator unavailable — refresh in a moment.',
+      }
+    },
+  )
+  return {
+    props: {
+      partnerId,
+      partnerDisplayName: PARTNERS[partnerId].displayName,
+      order,
+      initialQuote,
+    },
+  }
+}
+
+const Crumb = styled.div`
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  color: #696f79;
+  margin-bottom: 18px;
+  a {
+    color: #3d7165;
+    text-decoration: none;
+    font-weight: 500;
+    &:hover { text-decoration: underline; }
+  }
+`
+
+const Head = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 22px;
+`
+
+const Title = styled.h1`
+  font-family: 'Poppins', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #000929;
+  margin: 0 0 4px;
+  letter-spacing: -0.5px;
+`
+
+const Sub = styled.div`
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  color: #696f79;
+`
+
+const Badge = styled.span<{ bg: string }>`
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: ${({ bg }) => bg};
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+`
+
+const Layout = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const Card = styled.section`
+  background: white;
+  border-radius: 18px;
+  border: 1px solid #ecedf0;
+  padding: 22px;
+`
+
+const CardTitle = styled.h2`
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000929;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+`
+
+const Field = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  /* Grid items default to min-width: auto, which lets a child with intrinsic
+     size (e.g. <input type="date"> on iOS) push the column past 1fr. Force
+     min-width: 0 so the 1fr allocation actually wins. */
+  & > div {
+    min-width: 0;
+  }
+  /* Narrow viewports (phones) — stack the two fields so neither input is
+     squished. Matches the layout grid's 900px breakpoint above. */
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const Label = styled.label`
+  display: block;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #696f79;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+`
+
+// box-sizing + min-width:0 are both needed to keep <input type="date"> from
+// blowing past its grid column on iOS Safari (which gives date inputs an
+// intrinsic content width based on the "yyyy-mm-dd" placeholder + calendar
+// glyph). Without min-width:0 the grid column auto-expands to fit the
+// intrinsic size and the cell ends up wider than the screen.
+//
+// We also force a consistent visual height + white background across both
+// text and date inputs so they line up cleanly when stacked on phones —
+// iOS otherwise renders <input type="date"> with a slightly different
+// height and a faint gray fill, which makes a column of mixed inputs look
+// ragged on a 375px screen.
+const Input = styled.input`
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9dde2;
+  background: white;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  /* Date inputs on iOS keep the calendar glyph; normalize the gray box
+     they draw around it so a column of mixed inputs reads as one set. */
+  &::-webkit-date-and-time-value {
+    text-align: left;
+  }
+  &::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+  }
+  &:focus { border-color: #3d7165; }
+`
+
+const Textarea = styled.textarea`
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9dde2;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  min-height: 140px;
+  outline: none;
+  resize: vertical;
+  &:focus { border-color: #3d7165; }
+`
+
+const Select = styled.select`
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9dde2;
+  background: white;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  outline: none;
+  &:focus { border-color: #3d7165; }
+`
+
+const KV = styled.div`
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid #f1f2f4;
+  &:last-child { border-bottom: none; }
+`
+
+const KVLabel = styled.span`
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  color: #696f79;
+`
+
+const KVValue = styled.span`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #000929;
+  text-align: right;
+`
+
+const ButtonBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+`
+
+const SaveButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  background: #3d7165;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover:enabled { background: #345f55; }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+`
+
+// Duplicate-order styling — neutral utility button. Sits between Cancel
+// (destructive) and Reset (also neutral) in the action bar. Used as
+// a navigation link styled as a button via Next's <Link legacyBehavior>.
+const DuplicateButton = styled.a`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid #d9dde2;
+  color: #3d7165;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: background 0.1s, border-color 0.1s;
+  &:hover {
+    background: #f4faf7;
+    border-color: #3d7165;
+  }
+`
+
+// Cancel-order styling — destructive, but understated so it doesn't
+// dominate the form. Text + border, not a filled red block.
+const CancelButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  background: white;
+  color: #b3261e;
+  border: 1px solid #f1c0bb;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-right: auto;
+  &:hover:enabled { background: #fdecea; border-color: #b3261e; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`
+
+// Modal scrim + dialog for the cancel-confirm step. We render the same
+// 24h-invoice copy the partner-portal contract reflects, so there are no
+// surprise charges after the fact.
+const ModalScrim = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 9, 41, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 24px;
+`
+
+const ModalCard = styled.div`
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 460px;
+  width: 100%;
+  font-family: 'Poppins', sans-serif;
+`
+
+const ModalTitle = styled.h2`
+  font-size: 18px;
+  font-weight: 700;
+  color: #000929;
+  margin: 0 0 10px;
+`
+
+const ModalBody = styled.div`
+  font-size: 13px;
+  color: #2a313d;
+  line-height: 1.55;
+  margin-bottom: 18px;
+`
+
+const InvoiceNotice = styled.div<{ kind: 'free' | 'invoiced' }>`
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: ${({ kind }) => (kind === 'free' ? '#e7f6ec' : '#fdecea')};
+  color: ${({ kind }) => (kind === 'free' ? '#176c2c' : '#b3261e')};
+`
+
+const ModalActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+`
+
+const DestructiveButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  background: #b3261e;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover:enabled { background: #9a1f18; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`
+
+const ResetButton = styled.button`
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 11px 22px;
+  background: white;
+  color: #000929;
+  border: 1px solid #d9dde2;
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover:enabled { background: #f5f6fa; }
+`
+
+const Toast = styled.div<{ kind: 'ok' | 'err' }>`
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  background: ${({ kind }) => (kind === 'ok' ? '#e7f6ec' : '#fdecea')};
+  color: ${({ kind }) => (kind === 'ok' ? '#176c2c' : '#b3261e')};
+`
+
+// The three service types Iceland Travel actually uses through this portal.
+// Legacy values stamped on historical orders (Arrival service, Pickup, etc.)
+// will still render as the current value but can't be selected from the list.
+const SERVICE_OPTIONS = [
+  'Pickup & Delivery',
+  'Check-in service',
+  'BSI to Hotel Delivery',
+]
+
+// Iceland Travel uses dd/mm/yyyy — keep displays consistent regardless of
+// the staffer's device locale so an English-set iPhone still renders the
+// expected format.
+const fmtDate = (s: string | null) => {
+  if (!s) return '—'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getUTCFullYear()}`
+}
+
+type FormState = Record<EditableField, string>
+
+const orderToForm = (o: OrderSummary): FormState => ({
+  reference: o.reference || '',
+  email: o.email || '',
+  phone: o.phone || '',
+  serviceType: o.serviceType || '',
+  flightDate: o.flightDate || '',
+  pickupDate: o.pickupDate || '',
+  timeWindow: o.timeWindow || '',
+  pickupAddress: o.pickupAddress || '',
+  // Coord overrides aren't rendered as inputs — they're only edited by
+  // dragging the map pin. But FormState needs all EditableField keys so
+  // the diff helper sees them as no-op when not changed.
+  pickupLatOverride: o.pickupLatOverride != null ? String(o.pickupLatOverride) : '',
+  pickupLngOverride: o.pickupLngOverride != null ? String(o.pickupLngOverride) : '',
+  deliveryLatOverride:
+    o.deliveryLatOverride != null ? String(o.deliveryLatOverride) : '',
+  deliveryLngOverride:
+    o.deliveryLngOverride != null ? String(o.deliveryLngOverride) : '',
+  deliveryAddress: o.deliveryAddress || '',
+  deliveryDate: o.deliveryDate || '',
+  deliveryTimeWindow: o.deliveryTimeWindow || '',
+  flightNumber: o.flightNumber || '',
+  airline: o.airline || '',
+  // Strip any legacy auto-appended changelog blocks so the partner
+  // sees only their original notes in the edit textarea. For new
+  // orders this is a no-op (no markers present). For pre-2026-06
+  // bloated orders this cleans the field on first re-save.
+  comment: stripPartnerChangelog(o.comment),
+  // contactName is part of the EditableField union (so PATCH accepts it)
+  // but it's not rendered as a form input — the standalone `actor` input
+  // handles edits and is merged into the PATCH payload on save. Including
+  // it here keeps FormState's keys aligned with EditableField and never
+  // shows up in `diff` results (baseline === form for this field).
+  contactName: o.contactName || '',
+  bagsRegular: String(o.bagsRegular),
+  bagsOdd: String(o.bagsOdd),
+  // Pax: null in the OrderSummary maps to an empty string in the form
+  // (placeholder shows; submit drops the field). Anything else
+  // stringifies for display in the number input.
+  pax: o.pax == null ? '' : String(o.pax),
+})
+
+// Local-to-local services don't involve an airline; flight fields are hidden.
+const isLocalTransfer = (serviceType: string | null): boolean =>
+  serviceType === 'Pickup & Delivery' ||
+  serviceType === 'Delivery from storage' ||
+  serviceType === 'BSI to Hotel Delivery'
+
+// Status values where the partner needs the big live-tracking map up top.
+// Pre-planning (Pending/Confirmed) and terminal states (Delivered/Cancelled)
+// get a small sidebar map instead.
+const isLiveTrackingStage = (status: string | null): boolean =>
+  status === 'Planned' || status === 'In Progress'
+
+const diff = (
+  before: FormState,
+  after: FormState
+): Partial<Record<EditableField, string | number>> => {
+  const out: Partial<Record<EditableField, string | number>> = {}
+  ;(Object.keys(after) as EditableField[]).forEach((key) => {
+    // Compare trimmed strings so cosmetic whitespace drift (Airtable
+    // sometimes stores "Parliament " with a trailing space; the input
+    // renders / round-trips as "Parliament") doesn't show up as a save.
+    // The Save N button was counting these as real changes and the
+    // server changelog was logging "Parliament → Parliament" entries.
+    const a = String(after[key] ?? '').trim()
+    const b = String(before[key] ?? '').trim()
+    if (a === b) return
+    if (key === 'bagsRegular' || key === 'bagsOdd') {
+      const n = Number(after[key])
+      if (Number.isFinite(n) && n >= 0) out[key] = Math.floor(n)
+    } else {
+      // Persist the trimmed value so Airtable stops accumulating stray
+      // whitespace each time the order is saved.
+      out[key] = a
+    }
+  })
+  return out
+}
+
+export default function PartnerOrderPage({
+  partnerId,
+  partnerDisplayName,
+  order,
+  initialQuote,
+}: Props) {
+  const [original, setOriginal] = useState(order)
+  const [form, setForm] = useState<FormState>(() => orderToForm(order))
+  const [actor, setActor] = useState(order.contactName || '')
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
+  const [quote, setQuote] = useState<PriceQuote>(initialQuote)
+
+  useEffect(() => {
+    setOriginal(order)
+    setForm(orderToForm(order))
+    setActor(order.contactName || '')
+    setQuote(initialQuote)
+  }, [order, initialQuote])
+
+  // Monotonic counter so a late response from a previous input can't
+  // overwrite a newer one (see new.tsx for the longer explanation).
+  const quoteReqIdRef = useRef(0)
+
+  // Recompute the quote client-side whenever a price-relevant field
+  // changes in the edit form. Mirrors the live preview on the new-order
+  // page so the Trip Summary number updates as the PM tweaks bags or
+  // time window. 200ms debounce.
+  useEffect(() => {
+    const totalBags =
+      (Number(form.bagsRegular) || 0) + (Number(form.bagsOdd) || 0)
+    if (!form.serviceType || totalBags <= 0) return
+    const myReqId = ++quoteReqIdRef.current
+    const t = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          serviceType: form.serviceType,
+          bagsRegular: String(Number(form.bagsRegular) || 0),
+          bagsOdd: String(Number(form.bagsOdd) || 0),
+          // See new.tsx for the same conditional-include pattern — pax
+          // is forwarded only when the partner typed a positive value,
+          // so the quote endpoint can distinguish unset from explicit 0.
+          ...(Number(form.pax) > 0
+            ? { pax: String(Math.floor(Number(form.pax))) }
+            : {}),
+          timeWindow: form.timeWindow,
+          // Delivery time also feeds the surcharge calculation —
+          // 06:00 delivery on a daytime pickup still bills as night.
+          ...(form.deliveryTimeWindow
+            ? { deliveryTimeWindow: form.deliveryTimeWindow }
+            : {}),
+          pickupAddress: form.pickupAddress,
+          deliveryAddress: form.deliveryAddress,
+          _: String(Date.now()),
+        })
+        const res = await fetch(
+          `/api/partners/${partnerId}/quote?${params.toString()}`,
+          { cache: 'no-store' },
+        )
+        if (myReqId !== quoteReqIdRef.current) return // stale
+        if (!res.ok) return
+        const data = (await res.json()) as { quote: PriceQuote }
+        if (myReqId !== quoteReqIdRef.current) return
+        setQuote(data.quote)
+      } catch {
+        /* aborted by next change — ignore */
+      }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [
+    form.serviceType,
+    form.bagsRegular,
+    form.bagsOdd,
+    form.pax,
+    form.timeWindow,
+    form.deliveryTimeWindow,
+    form.pickupAddress,
+    form.deliveryAddress,
+  ])
+
+  const baseline = orderToForm(original)
+  const changes = diff(baseline, form)
+  const hasChanges = Object.keys(changes).length > 0
+
+  // Track whether the contact-name input has been edited since this order
+  // was loaded. If yes, we PATCH the dedicated `contactName` column too so
+  // the staffer's name persists across orders rather than only living in
+  // the comment changelog.
+  const contactChanged = actor.trim() !== (original.contactName || '').trim()
+  const hasAnyEdit = hasChanges || contactChanged
+
+  // ---- Cancel-order state + logic ----
+  //
+  // Cancel button is only meaningful for orders that haven't actually
+  // happened yet. Hide it for Delivered (trip done), Cancelled (already
+  // cancelled), In progress (driver mid-route, ops needs to handle).
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const cancellable =
+    original.status === 'Pending' ||
+    original.status === 'Confirmed' ||
+    original.status === 'Planned'
+  // Iceland Travel + Atlantik contract: cancellations >24h before the
+  // pickup date are free. Cancellations inside 24h are still allowed but
+  // the order is invoiced as if it ran. We compute against the start of
+  // the pickup day (UTC midnight) — partner staff don't enter exact
+  // pickup hours, so day-of cancellations always count as <24h.
+  const hoursToPickup = original.pickupDate
+    ? (Date.parse(original.pickupDate + 'T00:00:00Z') - Date.now()) / 3600_000
+    : null
+  const willBeInvoiced = hoursToPickup != null && hoursToPickup < 24
+
+  const onCancel = async () => {
+    if (cancelling) return
+    setCancelling(true)
+    setToast(null)
+    try {
+      const res = await fetch(
+        `/api/partners/${partnerId}/orders/${order.id}/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor: actor.trim() || undefined }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.message || 'Cancel failed')
+      }
+      const body = (await res.json()) as { order: OrderSummary }
+      setOriginal(body.order)
+      setForm(orderToForm(body.order))
+      setCancelOpen(false)
+      setToast({
+        kind: 'ok',
+        msg: willBeInvoiced
+          ? 'Order cancelled — within 24h of pickup, this booking will still be invoiced.'
+          : 'Order cancelled — no invoice will be issued.',
+      })
+    } catch (err) {
+      setToast({
+        kind: 'err',
+        msg: err instanceof Error ? err.message : 'Cancel failed',
+      })
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const onSave = async () => {
+    if (!hasAnyEdit || saving) return
+    setSaving(true)
+    setToast(null)
+    try {
+      const res = await fetch(
+        `/api/partners/${partnerId}/orders/${order.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changes: contactChanged
+              ? { ...changes, contactName: actor.trim() || null }
+              : changes,
+            actor: actor.trim() || undefined,
+          }),
+        }
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.message || 'Save failed')
+      }
+      const body = (await res.json()) as { order: OrderSummary }
+      setOriginal(body.order)
+      setForm(orderToForm(body.order))
+      setToast({
+        kind: 'ok',
+        msg: 'Changes saved — BagBee has been notified.',
+      })
+    } catch (err) {
+      setToast({
+        kind: 'err',
+        msg: err instanceof Error ? err.message : 'Save failed',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onReset = () => setForm(baseline)
+
+  const totalBags = (Number(form.bagsRegular) || 0) + (Number(form.bagsOdd) || 0)
+
+  return (
+    <PartnerLayout partnerId={partnerId} partnerDisplayName={partnerDisplayName}>
+      <Crumb>
+        <Link href={`/partners/${partnerId}/dashboard`}>← All orders</Link>
+      </Crumb>
+      <Head>
+        <div>
+          <Title>
+            {original.reference
+              ? `Ref ${original.reference}`
+              : original.orderNoShort}
+          </Title>
+          <Sub>
+            {original.orderNoShort} · {serviceTypeLabel(original.serviceType) || 'Service unknown'}
+          </Sub>
+        </div>
+        {original.status && (
+          <Badge bg={original.statusColor || '#6b7280'}>{original.status}</Badge>
+        )}
+      </Head>
+
+      {/*
+        Map sizing rule: once dispatch marks an order as Planned or In
+        Progress, the project-manager needs the live driver position front
+        and centre — render the map full-width above the form. Before that
+        (Pending / Confirmed) and after (Delivered / Cancelled) the map is
+        a secondary reference; it lives compactly in the sidebar.
+      */}
+      {isLiveTrackingStage(original.status) && (
+        <div style={{ marginBottom: 20 }}>
+          <OrderTrackingMap partnerId={partnerId} orderId={original.id} />
+        </div>
+      )}
+
+      <Layout>
+        <Card>
+          <CardTitle>Edit booking</CardTitle>
+
+          <Field>
+            <div>
+              <Label>Your reference number</Label>
+              <Input
+                placeholder="e.g. JKT-37012"
+                value={form.reference}
+                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Input
+                value={original.status || '—'}
+                readOnly
+                style={{ background: '#f7f8fa', color: '#696f79' }}
+              />
+            </div>
+          </Field>
+
+          <Field>
+            <div>
+              <Label>Service</Label>
+              <Select
+                value={form.serviceType}
+                onChange={(e) => setForm({ ...form, serviceType: e.target.value })}
+              >
+                <option value="">—</option>
+                {SERVICE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {serviceTypeLabel(s)}
+                  </option>
+                ))}
+                {/* If the order has a legacy service type that's no longer in
+                    SERVICE_OPTIONS, keep it visible so the partner can see it
+                    without us silently switching it to "—". */}
+                {form.serviceType &&
+                  !SERVICE_OPTIONS.includes(form.serviceType) && (
+                    <option value={form.serviceType}>
+                      {serviceTypeLabel(form.serviceType)} (legacy)
+                    </option>
+                  )}
+              </Select>
+            </div>
+            <div>
+              <Label>Date of service</Label>
+              <Input
+                type="date"
+                value={form.pickupDate}
+                onChange={(e) => setForm({ ...form, pickupDate: e.target.value })}
+              />
+            </div>
+          </Field>
+
+          <Field>
+            <div>
+              <Label>Time window</Label>
+              <Input
+                placeholder="e.g. 09:00 - 11:00"
+                value={form.timeWindow}
+                onChange={(e) => setForm({ ...form, timeWindow: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Pickup address / hotel</Label>
+              <Input
+                value={form.pickupAddress}
+                onChange={(e) => setForm({ ...form, pickupAddress: e.target.value })}
+              />
+            </div>
+          </Field>
+
+          {isLocalTransfer(form.serviceType) ? (
+            <>
+              <Field>
+                <div>
+                  <Label>Delivery address</Label>
+                  <Input
+                    value={form.deliveryAddress}
+                    placeholder="Where the bags should be dropped off"
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryAddress: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Delivery time window</Label>
+                  <Input
+                    placeholder="e.g. 11:00 - 13:00"
+                    value={form.deliveryTimeWindow}
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryTimeWindow: e.target.value })
+                    }
+                  />
+                </div>
+              </Field>
+              <Field>
+                <div>
+                  <Label>Delivery date (leave empty for same day)</Label>
+                  <Input
+                    type="date"
+                    value={form.deliveryDate}
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Bags (regular / odd-size)</Label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.bagsRegular}
+                      onChange={(e) =>
+                        setForm({ ...form, bagsRegular: e.target.value })
+                      }
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.bagsOdd}
+                      onChange={(e) => setForm({ ...form, bagsOdd: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field>
+                <div>
+                  <Label>Flight date</Label>
+                  <Input
+                    type="date"
+                    value={form.flightDate}
+                    onChange={(e) => setForm({ ...form, flightDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Flight number</Label>
+                  <Input
+                    placeholder="FI615"
+                    value={form.flightNumber}
+                    onChange={(e) =>
+                      setForm({ ...form, flightNumber: e.target.value })
+                    }
+                  />
+                </div>
+              </Field>
+              <Field>
+                <div>
+                  <Label>Airline</Label>
+                  <Input
+                    value={form.airline}
+                    onChange={(e) => setForm({ ...form, airline: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Bags (regular / odd-size)</Label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.bagsRegular}
+                      onChange={(e) =>
+                        setForm({ ...form, bagsRegular: e.target.value })
+                      }
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.bagsOdd}
+                      onChange={(e) => setForm({ ...form, bagsOdd: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </Field>
+            </>
+          )}
+
+          <Field>
+            <div>
+              <Label>PAX</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.pax}
+                onChange={(e) => setForm({ ...form, pax: e.target.value })}
+              />
+            </div>
+            <div />
+          </Field>
+
+          <Field>
+            <div>
+              <Label>Contact email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Contact phone</Label>
+              <PartnerPhoneInput
+                value={form.phone}
+                onChange={(v) => setForm({ ...form, phone: v })}
+              />
+            </div>
+          </Field>
+
+          <Label>Notes for BagBee ops</Label>
+          <Textarea
+            value={form.comment}
+            onChange={(e) => setForm({ ...form, comment: e.target.value })}
+          />
+
+          <div style={{ marginTop: 14 }}>
+            <Label>Your name (saved on the order + recorded with each change)</Label>
+            <Input
+              placeholder="e.g. Karólína K."
+              value={actor}
+              onChange={(e) => setActor(e.target.value)}
+            />
+          </div>
+
+          <ButtonBar>
+            {cancellable && (
+              <CancelButton
+                type="button"
+                onClick={() => setCancelOpen(true)}
+                disabled={saving || cancelling}
+              >
+                Cancel booking
+              </CancelButton>
+            )}
+            {/* Duplicate — opens the new-order form pre-filled from
+                this order. Useful for the common "create 6 similar
+                bookings with different dates" workflow (cruise
+                bulk-orders, multi-week tour transfers etc.). */}
+            <Link
+              href={`/partners/${partnerId}/orders/new?duplicate=${original.id}`}
+              passHref
+              legacyBehavior
+            >
+              <DuplicateButton type="button">Duplicate</DuplicateButton>
+            </Link>
+            <ResetButton onClick={onReset} disabled={!hasChanges || saving}>
+              Reset
+            </ResetButton>
+            <SaveButton onClick={onSave} disabled={!hasAnyEdit || saving}>
+              {(() => {
+                if (saving) return 'Saving…'
+                const n = Object.keys(changes).length + (contactChanged ? 1 : 0)
+                if (n === 0) return 'No changes'
+                return `Save ${n} change${n === 1 ? '' : 's'}`
+              })()}
+            </SaveButton>
+          </ButtonBar>
+          {toast && <Toast kind={toast.kind}>{toast.msg}</Toast>}
+        </Card>
+
+        {/* Cancel-confirm modal. Renders only when cancelOpen is true so
+            it stays out of the DOM in the normal flow. Different copy
+            depending on whether we're inside the 24h invoice window. */}
+        {cancelOpen && (
+          <ModalScrim onClick={() => !cancelling && setCancelOpen(false)}>
+            <ModalCard onClick={(e) => e.stopPropagation()}>
+              <ModalTitle>Cancel this booking?</ModalTitle>
+              <ModalBody>
+                Order <strong>{original.reference || original.orderNoShort}</strong>
+                {original.pickupDate && (
+                  <> · pickup {fmtDate(original.pickupDate)}</>
+                )}
+                . This will mark the booking as <strong>Cancelled</strong> in
+                BagBee's system. Drivers will be notified and no bags will be
+                collected.
+                {willBeInvoiced ? (
+                  <InvoiceNotice kind="invoiced">
+                    <strong>Within 24h of pickup</strong> — per contract, this
+                    booking will still be invoiced.
+                  </InvoiceNotice>
+                ) : (
+                  <InvoiceNotice kind="free">
+                    More than 24h before pickup — <strong>no invoice</strong>{' '}
+                    will be issued for this cancellation.
+                  </InvoiceNotice>
+                )}
+              </ModalBody>
+              <ModalActions>
+                <ResetButton
+                  type="button"
+                  onClick={() => setCancelOpen(false)}
+                  disabled={cancelling}
+                >
+                  Keep booking
+                </ResetButton>
+                <DestructiveButton
+                  type="button"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? 'Cancelling…' : 'Yes, cancel'}
+                </DestructiveButton>
+              </ModalActions>
+            </ModalCard>
+          </ModalScrim>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {!isLiveTrackingStage(original.status) && (
+            <OrderTrackingMap partnerId={partnerId} orderId={original.id} compact />
+          )}
+          <Card>
+            <CardTitle>Driver</CardTitle>
+            {original.driverName ? (
+              <>
+                <KV>
+                  <KVLabel>Assigned to</KVLabel>
+                  <KVValue>{original.driverName}</KVValue>
+                </KV>
+                {original.driverPhone ? (
+                  <>
+                    <KV>
+                      <KVLabel>Phone</KVLabel>
+                      <KVValue>
+                        <a
+                          href={`tel:${original.driverPhone}`}
+                          style={{
+                            color: '#3d7165',
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {original.driverPhone}
+                        </a>
+                      </KVValue>
+                    </KV>
+                    <DriverMessageBar
+                      driverPhone={original.driverPhone}
+                      driverName={original.driverName}
+                    />
+                  </>
+                ) : (
+                  <KV>
+                    <KVLabel>Phone</KVLabel>
+                    <KVValue style={{ color: '#a3a4a7' }}>not on file</KVValue>
+                  </KV>
+                )}
+                {/* Shift line intentionally hidden — it's an internal BagBee
+                    concept that doesn't help the partner project manager. */}
+                {original.optimoTrackingLink && (
+                  <a
+                    href={original.optimoTrackingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: 12,
+                      padding: '9px 14px',
+                      borderRadius: 10,
+                      background: '#2d7ff9',
+                      color: 'white',
+                      textDecoration: 'none',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Open OptimoRoute tracking
+                  </a>
+                )}
+              </>
+            ) : (
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 10,
+                  background: '#fef3c7',
+                  color: '#92400e',
+                  fontSize: 12,
+                  fontFamily: 'Poppins, sans-serif',
+                  lineHeight: 1.5,
+                }}
+              >
+                No driver assigned yet.
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <CardTitle>Trip summary</CardTitle>
+            <KV>
+              <KVLabel>Order #</KVLabel>
+              <KVValue>{original.orderNoShort}</KVValue>
+            </KV>
+            <KV>
+              <KVLabel>Total bags</KVLabel>
+              <KVValue>{totalBags}</KVValue>
+            </KV>
+            <KV>
+              <KVLabel>Estimated price</KVLabel>
+              <KVValue>
+                {quote.kind === 'priced' ? (
+                  <span title={quote.lineItems.map((li) => `${li.label}: ${formatIsk(li.amountIsk)}`).join('\n')}>
+                    {formatIsk(quote.totalIsk)}
+                    {hasTentativePricing(form.pickupDate) && (
+                      <span
+                        style={{ color: '#92400e', fontSize: 11, marginLeft: 6 }}
+                        title="Future-year booking — current pricelist may not still apply at delivery."
+                      >
+                        *
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span style={{ color: '#92400e' }} title={quote.reason}>
+                    We'll quote
+                  </span>
+                )}
+              </KVValue>
+            </KV>
+            {hasTentativePricing(form.pickupDate) && (
+              <KV style={{ borderBottom: 'none' }}>
+                <KVValue
+                  style={{
+                    fontSize: 11,
+                    color: '#6f5a14',
+                    textAlign: 'left',
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  *Future-year booking — quoted price is provisional and may be
+                  revised if the pricelist is updated before the date of service.
+                </KVValue>
+              </KV>
+            )}
+            <KV>
+              <KVLabel>Pickup</KVLabel>
+              <KVValue>
+                {fmtDate(original.pickupDate)} · {original.timeWindow || '—'}
+              </KVValue>
+            </KV>
+            {isLocalTransfer(original.serviceType) ? (
+              <KV>
+                <KVLabel>Delivery</KVLabel>
+                <KVValue>
+                  {original.deliveryDate
+                    ? fmtDate(original.deliveryDate)
+                    : 'Same day'}{' '}
+                  · {original.deliveryTimeWindow || '—'}
+                </KVValue>
+              </KV>
+            ) : (
+              <>
+                <KV>
+                  <KVLabel>Flight</KVLabel>
+                  <KVValue>
+                    {original.airline || '—'} {original.flightNumber || ''}
+                  </KVValue>
+                </KV>
+                <KV>
+                  <KVLabel>Flight date</KVLabel>
+                  <KVValue>{fmtDate(original.flightDate)}</KVValue>
+                </KV>
+              </>
+            )}
+            <KV>
+              <KVLabel>Status</KVLabel>
+              <KVValue>{original.status || '—'}</KVValue>
+            </KV>
+          </Card>
+
+        </div>
+      </Layout>
+    </PartnerLayout>
+  )
+}
